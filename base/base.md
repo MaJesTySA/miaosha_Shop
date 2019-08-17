@@ -42,13 +42,13 @@
 
 ## 注册
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/SecKill_Bases/master/imgs/register.png" style="width:300px;height:auto"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register.png" style="width:300px;height:auto"/>
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/SecKill_Bases/master/imgs/register1.png" style="width:300px;height:auto"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register1.png" style="width:300px;height:auto"/>
 
 ## 商品列表
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/SecKill_Bases/master/imgs/list.png" style="width:600px;height:auto"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/list.png" style="width:600px;height:auto"/>
 
 ## 商品详情
 
@@ -58,7 +58,7 @@
 
 # 项目架构
 
-![](https://raw.githubusercontent.com/MaJesTySA/SecKill_Bases/master/imgs/structure.png)
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/structure.png" style="width:auto;height:auto"/>
 
 # 要点和细节
 
