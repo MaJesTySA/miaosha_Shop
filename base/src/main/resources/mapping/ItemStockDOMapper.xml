@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="dao.ItemStockDOMapper">
+  <resultMap id="BaseResultMap" type="dataobject.ItemStockDO">
+    <id column="id" jdbcType="INTEGER" property="id" />
+    <result column="stock" jdbcType="INTEGER" property="stock" />
+    <result column="item_id" jdbcType="INTEGER" property="itemId" />
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, stock, item_id
+  </sql>
+  <!--减库存操作-->
+  <update id="decreaseStock">
+    update stock
+    set stock = stock-#{amount}
+    where item_id = #{itemId} and stock >=#{amount}
+  </update>
+  <select id="selectByItemId" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+    select
+    <include refid="Base_Column_List" />
+    from stock
+    where item_id = #{itemId,jdbcType=INTEGER}
+  </select>
+  <select id="selectByPrimaryKey" parameterType="java.lang.Integer" resultMap="BaseResultMap">
+    select 
+    <include refid="Base_Column_List" />
+    from stock
+    where id = #{id,jdbcType=INTEGER}
+  </select>
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.Integer">
+    delete from stock
+    where id = #{id,jdbcType=INTEGER}
+  </delete>
+  <insert id="insert" parameterType="dataobject.ItemStockDO">
+    insert into stock (id, stock, item_id
+      )
+    values (#{id,jdbcType=INTEGER}, #{stock,jdbcType=INTEGER}, #{itemId,jdbcType=INTEGER}
+      )
+  </insert>
+  <insert id="insertSelective" parameterType="dataobject.ItemStockDO">
+    insert into stock
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        id,
+      </if>
+      <if test="stock != null">
+        stock,
+      </if>
+      <if test="itemId != null">
+        item_id,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        #{id,jdbcType=INTEGER},
+      </if>
+      <if test="stock != null">
+        #{stock,jdbcType=INTEGER},
+      </if>
+      <if test="itemId != null">
+        #{itemId,jdbcType=INTEGER},
+      </if>
+    </trim>
+  </insert>
+  <update id="updateByPrimaryKeySelective" parameterType="dataobject.ItemStockDO">
+    update stock
+    <set>
+      <if test="stock != null">
+        stock = #{stock,jdbcType=INTEGER},
+      </if>
+      <if test="itemId != null">
+        item_id = #{itemId,jdbcType=INTEGER},
+      </if>
+    </set>
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+  <update id="updateByPrimaryKey" parameterType="dataobject.ItemStockDO">
+    update stock
+    set stock = #{stock,jdbcType=INTEGER},
+      item_id = #{itemId,jdbcType=INTEGER}
+    where id = #{id,jdbcType=INTEGER}
+  </update>
+</mapper>

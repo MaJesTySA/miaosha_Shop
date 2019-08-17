@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="dao.OrderDOMapper">
+  <resultMap id="BaseResultMap" type="dataobject.OrderDO">
+    <id column="id" jdbcType="VARCHAR" property="id" />
+    <result column="user_id" jdbcType="INTEGER" property="userId" />
+    <result column="item_id" jdbcType="INTEGER" property="itemId" />
+    <result column="item_price" jdbcType="DOUBLE" property="itemPrice" />
+    <result column="amount" jdbcType="INTEGER" property="amount" />
+    <result column="order_price" jdbcType="DOUBLE" property="orderPrice" />
+    <result column="promo_id" jdbcType="INTEGER" property="promoId"/>
+  </resultMap>
+  <sql id="Base_Column_List">
+    id, user_id, item_id, promo_id,item_price, amount, order_price
+  </sql>
+  <select id="selectByPrimaryKey" parameterType="java.lang.String" resultMap="BaseResultMap">
+    select 
+    <include refid="Base_Column_List" />
+    from order_info
+    where id = #{id,jdbcType=VARCHAR}
+  </select>
+  <delete id="deleteByPrimaryKey" parameterType="java.lang.String">
+    delete from order_info
+    where id = #{id,jdbcType=VARCHAR}
+  </delete>
+  <insert id="insert" parameterType="dataobject.OrderDO">
+    insert into order_info (id, user_id, item_id, promo_id,
+      item_price, amount, order_price
+      )
+    values (#{id,jdbcType=VARCHAR}, #{userId,jdbcType=INTEGER}, #{itemId,jdbcType=INTEGER},
+    #{promoId,jdbcType=INTEGER},
+    #{itemPrice,jdbcType=DOUBLE}, #{amount,jdbcType=INTEGER}, #{orderPrice,jdbcType=DOUBLE}
+      )
+  </insert>
+  <insert id="insertSelective" parameterType="dataobject.OrderDO">
+    insert into order_info
+    <trim prefix="(" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        id,
+      </if>
+      <if test="userId != null">
+        user_id,
+      </if>
+      <if test="itemId != null">
+        item_id,
+      </if>
+      <if test="promoId != null">
+        promo_id,
+      </if>
+      <if test="itemPrice != null">
+        item_price,
+      </if>
+      <if test="amount != null">
+        amount,
+      </if>
+      <if test="orderPrice != null">
+        order_price,
+      </if>
+    </trim>
+    <trim prefix="values (" suffix=")" suffixOverrides=",">
+      <if test="id != null">
+        #{id,jdbcType=VARCHAR},
+      </if>
+      <if test="userId != null">
+        #{userId,jdbcType=INTEGER},
+      </if>
+      <if test="itemId != null">
+        #{itemId,jdbcType=INTEGER},
+      </if>
+      <if test="promoId != null">
+        #{promoId,jdbcType=INTEGER},
+      </if>
+      <if test="itemPrice != null">
+        #{itemPrice,jdbcType=DOUBLE},
+      </if>
+      <if test="amount != null">
+        #{amount,jdbcType=INTEGER},
+      </if>
+      <if test="orderPrice != null">
+        #{orderPrice,jdbcType=DOUBLE},
+      </if>
+    </trim>
+  </insert>
+  <update id="updateByPrimaryKeySelective" parameterType="dataobject.OrderDO">
+    update order_info
+    <set>
+      <if test="userId != null">
+        user_id = #{userId,jdbcType=INTEGER},
+      </if>
+      <if test="itemId != null">
+        item_id = #{itemId,jdbcType=INTEGER},
+      </if>
+      <if test="itemPrice != null">
+        item_price = #{itemPrice,jdbcType=DOUBLE},
+      </if>
+      <if test="amount != null">
+        amount = #{amount,jdbcType=INTEGER},
+      </if>
+      <if test="orderPrice != null">
+        order_price = #{orderPrice,jdbcType=DOUBLE},
+      </if>
+    </set>
+    where id = #{id,jdbcType=VARCHAR}
+  </update>
+  <update id="updateByPrimaryKey" parameterType="dataobject.OrderDO">
+    update order_info
+    set user_id = #{userId,jdbcType=INTEGER},
+      item_id = #{itemId,jdbcType=INTEGER},
+      item_price = #{itemPrice,jdbcType=DOUBLE},
+      amount = #{amount,jdbcType=INTEGER},
+      order_price = #{orderPrice,jdbcType=DOUBLE}
+    where id = #{id,jdbcType=VARCHAR}
+  </update>
+</mapper>
