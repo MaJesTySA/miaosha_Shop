@@ -39,4 +39,3 @@
 # 进阶项目
 
 [性能优化，打造亿级秒杀系统项目笔记](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance.md)
-
