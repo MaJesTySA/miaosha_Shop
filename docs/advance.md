@@ -2,13 +2,11 @@
 
 慕课网上一个非常不错的分布式秒杀商城的课程，老师讲得非常棒，全程高能，干货满满，尊重知识产权，贴上[课程地址](https://coding.imooc.com/class/338.html)。
 
-之前已经把秒杀项目搭建免费课程的源码和解析上传到了[项目基础搭建](https://github.com/MaJesTySA/SecKill_Bases/blob/master/README.md)。这个仓库就不贴完整代码了。
-
 ------
 
 # 进阶项目核心知识点
 
-![](https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/points.png)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/points.png)
 
 ------
 
@@ -16,13 +14,13 @@
 
 ## 项目结构—数据模型
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/models.png>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/models.png)
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/datamodels.png>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/datamodels.png)
 
 ## 项目结构—DAO/Service/Controller结构
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/classmodels.png>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/classmodels.png)
 
 ------
 
@@ -134,7 +132,7 @@ nohup java -Xms400m -Xmx400m -XX:NewSize=200m -XX:MaxNewSize=200m -jar miaosha.j
 
 ## 项目架构
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/frame1.png>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/frame1.png)
 
 ## 发现并发容量问题
 
@@ -209,7 +207,7 @@ public class WebServerConfiguration implements WebServerFactoryCustomizer<Config
 
 ## 项目架构
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/frame2.png>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/frame2.png)
 
 ## Nginx部署前端静态资源
 
@@ -217,7 +215,7 @@ public class WebServerConfiguration implements WebServerFactoryCustomizer<Config
 
 **项目架构**：
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/frame3.png>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/frame3.png)
 
 将静态资源上传到相应目录，并修改`nginx.conf`中的
 
@@ -304,17 +302,19 @@ server{
 
 而**epoll模型**，在**Linux Select**模型之上，新增了**回调函数**，一旦某个连接发生变化，直接执行回调函数，不用遍历，效率更高。
 
-## Nginx高性能原因—Master-worker进程模型
+## Nginx高性能原因—master-worker进程模型
 
-通过`ps -ef|grep nginx`命名可以看到有两个nginx进程，一个标注为`master`，一个标注为`worker`，而且`worker`进程是`master`进程的子进程。这种父子关系的好处就是，`master`进程可以管理`worker`进程。
+通过`ps -ef|grep nginx`命令可以看到有两个Nginx进程，一个标注为`master`，一个标注为`worker`，而且`worker`进程是`master`进程的子进程。这种父子关系的好处就是，`master`进程可以管理`worker`进程。
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/ngxin2.jpg>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/ngxin2.jpg)
 
-**Ngxin进程结构如下**：
+### Ngxin进程结构
 
-![](<https://raw.githubusercontent.com/MaJesTySA/SecKill_Advanced/master/imgs/nginx.png>)
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/nginx.png)
 
-**Master-worker高效原理**：客户端的请求，并不会被`master`进程处理，而是交给下面的`worker`进程来处理，多个`worker`进程通过“抢占”的方式，取得处理权。如果某个`worker`挂了，`master`会立刻感知到，用一个新的`worker`代替。这就是Nginx高效率的原因之一，也是可以平滑重启的原理。
+### Master-worker高效原理
+
+客户端的请求，并不会被`master`进程处理，而是交给下面的`worker`进程来处理，多个`worker`进程通过“**抢占**”的方式，取得处理权。如果某个`worker`挂了，`master`会立刻感知到，用一个新的`worker`代替。这就是Nginx高效率的原因之一，也是可以平滑重启的原理。
 
 此外，`worker`进程是单线程的，没有阻塞的情况下，效率很高。而`epoll`模型避免了阻塞。
 
@@ -322,7 +322,16 @@ server{
 
 ## Nginx高性能原因—协程机制
 
-ngxin引入了一种比线程更小的概念，那就是“协程”。协程依附于内存模型，切换开销更小；遇到阻塞，nginx会立刻剥夺执行权；由于在同一个线程内，不需要加锁。
+nginx引入了一种比线程更小的概念，那就是“**协程**”。协程依附于内存模型，切换开销更小；遇到阻塞，nginx会立刻剥夺执行权；由于在同一个线程内，不需要加锁。
+
+## 小结
+
+这一节对单机系统进行了分布式扩展，使得吞吐量和响应时间有了一定提升。虽然提升不大，但是单个服务器的压力明显降低。
+
+1. 首先把前端资源部署到了Nginx服务器。
+2. 然后把Nginx作为反向代理服务器，把后端项目部署到了另外两台服务器。
+3. 接着优化了Nginx与后端服务器的连接。
+4. 最后分析了Nginx高效的原因，包括epoll多路复用、master-worker机制、协程机制。
 
 ## 接下来的优化方向
 
@@ -330,39 +339,113 @@ ngxin引入了一种比线程更小的概念，那就是“协程”。协程依
 
 ------
 
-## 分布式会话
+# 分布式会话
 
-**基于Cookie传输SessionId**：就是把Tomcat生成的SessionId转存到Redis服务器上，从而实现分布式会话。
+## 基于Cookie传输SessionId
 
-在之前的项目引入两个jar包，分别是`spring-boot-starter-data-redis`和`spring-session-data-redis`，某些情况下，可能还需要引入`spring-security-web`。
+就是把Tomcat生成的`SessionId`转存到Redis服务器上，从而实现分布式会话。
 
-`config`包下新建一个`RedisConfig`的类，没有任何方法和属性，添加`@Component`和`@EnableRedisHttpSession(maxInactiveIntervalInSeconds=3600)`注解让Spring识别并自动配置过期时间。
+在之前的项目引入两个`jar`包，分别是`spring-boot-starter-data-redis`和`spring-session-data-redis`，某些情况下，可能还需要引入`spring-security-web`。
 
-接着在`application.properties`里面添加redis相关连接配置。
+`config`包下新建一个`RedisConfig`的类，暂时没有任何方法和属性，添加`@Component`和`@EnableRedisHttpSession(maxInactiveIntervalInSeconds=3600)`注解让Spring识别并自动配置过期时间。
 
-最后别忘了对`UserModel`类实现`Serializable`接口。
+接着在`application.properties`里面添加Redis相关连接配置。
 
-这样，之前代码中的下段代码，就会自动将Session保存到Redis服务器上。
+```properties
+spring.redis.host=RedisServerIp
+spring.redis.port=6379
+spring.redis.database=0
+spring.redis.password=
+```
+
+**最后**！**最后**！**最后**，由于`UserModel`对象会被存到Redis里面，需要被**序列化**，所以要对`UserModel`类实现`Serializable`接口。
+
+这样，之前的代码，就会自动将Session保存到Redis服务器上。
 
 ```java
 this.httpServletRequest.getSession().setAttribute("IS_LOGIN",true);
 this.httpServletRequest.getSession().setAttribute("LOGIN_USER",userModel);
 ```
 
-**基于Token传输类似SessionId**：Spring Boot在Redis存入的SessionId有多项，不够简洁。一般常用UUID生成类似SessionId的唯一登录凭证，然后将`UUID`作为`key`，`UserModel`作为`value`存入到Redis服务器。
+## 基于Token传输类似SessionId
 
-需要登录验证的时候，直接从Redis服务器里面通过`token`拿出`UserModel`对象即可。
+Spring Boot在Redis存入的`SessionId`有多项，不够简洁。一般常用UUID生成类似`SessionId`的唯一登录凭证`token`，然后将生成的`token`作为KEY，`UserModel`作为VALUE存入到Redis服务器。
+
+```java
+String uuidToken=UUID.randomUUID().toString();
+uuidToken=uuidToken.replace("-","");
+//建立Token与用户登录态的联系
+redisTemplate.opsForValue().set(uuidToken,userModel);
+//设置超时时间
+redisTemplate.expire(uuidToken,1, TimeUnit.HOURS);
+return CommonReturnType.create(uuidToken);
+```
+
+将生成的`token`返回给前端，前端在登录成功之后，将`token`**存放到`localStorage`里面**。
+
+```javascript
+if (data.status == "success") {
+    alter("登录成功");
+    var token = data.data;
+    window.localStorage["token"] = token;
+    window.location.href = "listitem.html";
+}
+```
+
+前端的下单操作，需要验证登录状态。
+
+```javascript
+var token = window.localStorage["token"];
+if (token == null) {
+    alter("没有登录，不能下单");
+    window.location.href = "login.html";
+    return false;
+}
+```
+
+在请求后端下单接口的时候，需要把这个`token`带上。
+
+```javascript
+$.ajax({
+    type: "POST",
+    url: "http://" + g_host + "/order/createorder?token=" + token,
+    ···
+});
+```
+
+后端之前是使用`SessionId`来获取登录状态的。
+
+```java
+Boolean isLogin=(Boolean)httpServletRequest.getSession().getAttribute("IS_LOGIN");
+if(isLogin==null||!isLogin.booleanValue())
+    throw new BizException(EmBizError.USER_NOT_LOGIN,"用户还未登录，不能下单");
+UserModel userModel = (UserModel)httpServletRequest.getSession().getAttribute("LOGIN_USER");
+```
+
+现在利用前端传过来的`token`，从Redis服务器里面获取这个`token`对应的`UserModel`对象。
 
 ```java
 String token=httpServletRequest.getParameterMap().get("token")[0];
 if(StringUtils.isEmpty(token)){
-	throw new BizException(EmBizError.USER_NOT_LOGIN,"用户还未登录，不能下单");
+    throw new BizException(EmBizError.USER_NOT_LOGIN,"用户还未登录，不能下单");
 }
 UserModel userModel= (UserModel) redisTemplate.opsForValue().get(token);
-	if(userModel==null){
-		throw new BizException(EmBizError.USER_NOT_LOGIN,"登录过期，请重新登录");
+if(userModel==null){
+    throw new BizException(EmBizError.USER_NOT_LOGIN,"登录过期，请重新登录");
 }
 ```
 
+## 小结
 
+本节引入了分布式会话，有两种常见的实现方式：
 
+1. 第一种是通过Spring提供的API，将Tomcat的`SessionId`和`UserModel`存到Redis服务器上。
+2. 第二种是通过UUID生成登录`token`，将`token`和`UserModel`存到Redis服务器上。
+
+## 接下来的优化方向
+
+目前服务器的性能瓶颈在于数据库的大量读取操作，接下来会引入**缓存**，优化查询。
+
+# 查询优化之多级缓存
+
+多级缓存有两层含义，一个是缓存，一个是多级。所谓缓存，
