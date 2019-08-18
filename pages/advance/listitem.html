@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="static/assets/global/plugins/jquery-1.11.0.min.js"></script>
+    <link href="static/assets/global/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+    <link href="static/assets/global/css/components.css" rel="stylesheet" type="text/css"/>
+    <link href="static/assets/admin/pages/css/login.css" rel="stylesheet" type="text/css"/>
+    <script src="gethost.js" type="text/javascript"></script>
+</head>
+<body>
+<div class="content">
+    <h3 class="form-title">商品列表浏览</h3>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>商品名</th>
+                <th>商品图片</th>
+                <th>商品描述</th>
+                <th>商品价格</th>
+                <th>商品库存</th>
+                <th>商品销量</th>
+            </tr>
+            </thead>
+            <tbody id="container">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</body>
+<script>
+    //全局商品信息数组
+    var global_itemList = [];
+    jQuery(document).ready(function () {
+        $.ajax({
+            type: "GET",
+            url: "http://" + g_host + "/item/list",
+            xhrFields: {withCredentials: true},
+            success: function (data) {
+                if (data.status == "success") {
+                    global_itemList = data.data;
+                    reloadDom();
+                } else {
+                    alert("获取商品信息失败，原因为" + data.data.errMsg);
+                }
+            },
+            error: function (data) {
+                alert("获取商品信息失败，原因为" + data.data.errMsg)
+            }
+        });
+    });
+
+    function reloadDom() {
+        for (var i = 0; i < global_itemList.length; i++) {
+            var itemVO = global_itemList[i];
+            var dom = "<tr data-id='" + itemVO.id + "' id='itemDetail" + itemVO.id + "'>" +
+                "<td>" + itemVO.title + "</td>"
+                + "<td><img style='width:100px;height:auto;' src='" + itemVO.imgUrl + "'/></td>"
+                + "<td>" + itemVO.description + "</td>"
+                + "<td>" + itemVO.price + "</td>"
+                + "<td>" + itemVO.stock + "</td>"
+                + "<td>" + itemVO.sales + "</td>"
+                + "</tr>"
+            $("#container").append($(dom));
+
+            $("#itemDetail" + itemVO.id).on("click", function (e) {
+                window.location.href = "getitem.html?id=" + $(this).data("id");
+            });
+        }
+    }
+</script>
+</html>

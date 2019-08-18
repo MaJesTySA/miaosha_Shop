@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="static/assets/global/plugins/jquery-1.11.0.min.js"></script>
+    <link href="static/assets/global/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+    <link href="static/assets/global/css/components.css" rel="stylesheet" type="text/css"/>
+    <link href="static/assets/admin/pages/css/login.css" rel="stylesheet" type="text/css"/>
+    <script src="gethost.js" type="text/javascript"></script>
+    <title>XXX商城——获取验证码</title>
+</head>
+<body class="login">
+<div class="content">
+    <h3 class="form-title">获取验证码</h3>
+    <div class="form-group">
+        <label class="control-label">手机号</label>
+        <div>
+            <input class="form-control" type="text" placeholder="手机号" name="telphone" id="telphone"/>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button class="btn blue" id="getotp" type="submit">
+            获取验证码短信
+        </button>
+    </div>
+</div>
+</body>
+<script>
+    jQuery(document).ready(function () {
+        $("#getotp").on("click", function () {
+            var telphone = $("#telphone").val();
+            if (telphone == null || telphone == "") {
+                alert("手机号不能为空");
+                return false;
+            }
+            $.ajax({
+                type: "POST",
+                contentType: "application/x-www-form-urlencoded",
+                url: "http://" + g_host + "/user/getOtp",
+                data: {
+                    "telphone": $("#telphone").val(),
+                },
+                xhrFields: {withCredentials: true},
+                success: function (data) {
+                    if (data.status == "success") {
+                        alert("短信已经发送到了您的手机上，请注意查收");
+                        window.location.href = "register.html";
+                    } else {
+                        alert("短信发送失败，内部原因为" + data.data.errMsg);
+                    }
+                },
+                error: function (data) {
+                    alert("短信发送失败，原因为" + data.responseText);
+                }
+            });
+            return false;
+        });
+    })
+</script>
+</html>
