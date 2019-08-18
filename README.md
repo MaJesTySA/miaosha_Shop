@@ -2,7 +2,7 @@
 
 # 基础项目
 
-[Spring Boot构建电商基础秒杀项目笔记](https://github.com/MaJesTySA/miaosha_Shop/blob/master/base/base.md)
+[Spring Boot构建电商基础秒杀项目笔记](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/base.md)
 
 * 效果展示
   * 注册
@@ -37,4 +37,6 @@
 * 改进
 
 # 进阶项目
+
+[性能优化，打造亿级秒杀系统项目笔记](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance.md)
 
