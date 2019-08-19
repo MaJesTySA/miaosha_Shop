@@ -1,3 +1,57 @@
+- [前言](#前言)
+- [进阶项目核心知识点](#进阶项目核心知识点)
+- [基础项目回顾](#基础项目回顾)
+  - [项目结构—数据模型](#项目结构数据模型)
+  - [项目结构—DAO/Service/Controller结构](#项目结构daoservicecontroller结构)
+  - [全局异常处理类](#全局异常处理类)
+- [项目云端部署](#项目云端部署)
+  - [数据库部署](#数据库部署)
+  - [项目打包](#项目打包)
+  - [deploy启动脚本](#deploy启动脚本)
+- [jmeter性能压测](#jmeter性能压测)
+- [单机服务器并发容量问题和优化](#单机服务器并发容量问题和优化)
+  - [项目架构](#项目架构)
+  - [发现并发容量问题](#发现并发容量问题)
+  - [Spring Boot内嵌Tomcat线程优化](#spring-boot内嵌tomcat线程优化)
+  - [Spring Boot内嵌Tomcat网络连接优化](#spring-boot内嵌tomcat网络连接优化)
+  - [小结](#小结)
+  - [接下来的优化方向](#接下来的优化方向)
+- [分布式扩展优化](#分布式扩展优化)
+  - [项目架构](#项目架构-1)
+  - [Nginx部署前端静态资源](#nginx部署前端静态资源)
+  - [Nginx反向代理处理Ajax请求](#nginx反向代理处理ajax请求)
+  - [开启Tomcat Access Log验证](#开启tomcat-access-log验证)
+  - [Nginx反向代理长连接优化](#nginx反向代理长连接优化)
+  - [分布式扩展后的效果](#分布式扩展后的效果)
+  - [Nginx高性能原因—epoll多路复用](#nginx高性能原因epoll多路复用)
+  - [Nginx高性能原因—master-worker进程模型](#nginx高性能原因master-worker进程模型)
+    - [Ngxin进程结构](#ngxin进程结构)
+    - [Master-worker高效原理](#master-worker高效原理)
+  - [Nginx高性能原因—协程机制](#nginx高性能原因协程机制)
+  - [小结](#小结-1)
+  - [接下来的优化方向](#接下来的优化方向-1)
+- [分布式会话](#分布式会话)
+  - [基于Cookie传输SessionId](#基于cookie传输sessionid)
+  - [基于Token传输类似SessionId](#基于token传输类似sessionid)
+  - [小结](#小结-2)
+  - [接下来的优化方向](#接下来的优化方向-2)
+- [查询优化之多级缓存](#查询优化之多级缓存)
+  - [项目架构](#项目架构-2)
+  - [优化商品查询接口—单机版Redis缓存](#优化商品查询接口单机版redis缓存)
+    - [序列化格式问题](#序列化格式问题)
+    - [时间序列化格式问题](#时间序列化格式问题)
+  - [优化商品查询接口—本地热点缓存](#优化商品查询接口本地热点缓存)
+    - [本地缓存缺点](#本地缓存缺点)
+  - [缓存优化后的效果](#缓存优化后的效果)
+  - [Nginx Proxy Cache缓存](#nginx-proxy-cache缓存)
+    - [Nginx Proxy Cache缓存效果](#nginx-proxy-cache缓存效果)
+  - [Nginx lua脚本](#nginx-lua脚本)
+    - [lua脚本实战](#lua脚本实战)
+  - [OpenResty—Shared dic](#openrestyshared-dic)
+    - [Shared dict缓存效果](#shared-dict缓存效果)
+  - [小结](#小结-3)
+  - [接下来的优化方向](#接下来的优化方向-3)
+
 # 前言
 
 慕课网上一个非常不错的分布式秒杀商城的课程，老师讲得非常棒，全程高能，干货满满，尊重知识产权，贴上[课程地址](https://coding.imooc.com/class/338.html)。
@@ -36,7 +90,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseBody
     public CommonReturnType doError(HttpServletRequest request, HttpServletResponse response,Exception ex){
-        ex.printStackTrace();
+        //开发过程中使用 ex.printStackTrace();
         Map<String,Object> responseData=new HashMap<>();
         if(ex instanceof BizException){
             BizException bizException=(BizException)ex;
@@ -211,7 +265,7 @@ public class WebServerConfiguration implements WebServerFactoryCustomizer<Config
 
 ## Nginx部署前端静态资源
 
-用户通过`nginx/html/resources`访问前端静态页面。而Ajax请求则会通过nginx反向代理到两台不同的应用服务器。
+用户通过`nginx/html/resources`访问前端静态页面。而Ajax请求则会通过Nginx反向代理到两台不同的应用服务器。
 
 **项目架构**：
 
@@ -286,19 +340,17 @@ server{
 
 ## 分布式扩展后的效果
 
-**单机环境**下，发送1000*30个请求，TPS在**1500**左右，平均响应时间**460**毫秒。CPU的`us`高达8.0，`loadaverage`三个指标加起来接近于2了（CPU核数）。
+- **单机环境**下，发送1000*30个请求，TPS在**1400**左右，平均响应时间**460**毫秒。CPU的`us`高达8.0，`loadaverage`三个指标加起来接近于2了（CPU核数）。
+- **分布式**扩展后，TPS在**1700**左右，平均响应时间**440**毫秒。但是CPU的`us`只有2.5左右，`loadaverage`1分钟在0.5左右，服务器的压力小了很多，有更多的并发提升空间。
+- **后端长连接后**，虽然TPS也是1700多，但是响应时间降低到了**350**毫秒。
 
-**分布式**扩展后，TPS在**1800**左右，平均响应时间**440**毫秒。但是CPU的`us`只有2.5左右，`loadaverage`1分钟在0.5左右，服务器的压力小了很多，有更多的并发提升空间。
-
-**后端长连接后**，虽然TPS也是1800多，但是响应时间降低到了**350**毫秒。
-
-（通过`netstat -an | grep miaoshaApp1_ip`可以查看Nginx服务器与后端服务器的连接情况，没开启长连接时，每次连接端口都在变，开启后，端口维持不变。）
+通过`netstat -an | grep miaoshaApp1_ip`可以查看Nginx服务器与后端服务器的连接情况，没开启长连接时，每次连接端口都在变，开启后，端口维持不变。
 
 ## Nginx高性能原因—epoll多路复用
 
 在了解**epoll多路复用**之前，先看看**Java BIO**模型，也就是Blocking IO，阻塞模型。当客户端与服务器建立连接之后，通过`Socket.write()`向服务器发送数据，只有当数据写完之后，才会发送。如果当Socket缓冲区满了，那就不得不阻塞等待。
 
-接下来看看**Linux Select**模型。该模式下，会监听一定数量的客户端连接，一旦发现有变动，就会唤醒自己，然后遍历这些连接，看哪些连接发生了变化，执行IO操作。相比阻塞式的BIO，效率更高，但是也有个问题，如果10000个连接变动了1个，那么效率将会十分低。此外，**Java NIO**，即New IO或者Non-Blocking IO就借鉴了Linux Select模型。
+接下来看看**Linux Select**模型。该模式下，会监听一定数量的客户端连接，一旦发现有变动，就会唤醒自己，然后遍历这些连接，看哪些连接发生了变化，执行IO操作。相比阻塞式的BIO，效率更高，但是也有个问题，如果10000个连接变动了1个，那么效率将会十分低下。此外，**Java NIO**，即New IO或者Non-Blocking IO就借鉴了Linux Select模型。
 
 而**epoll模型**，在**Linux Select**模型之上，新增了**回调函数**，一旦某个连接发生变化，直接执行回调函数，不用遍历，效率更高。
 
@@ -316,17 +368,17 @@ server{
 
 客户端的请求，并不会被`master`进程处理，而是交给下面的`worker`进程来处理，多个`worker`进程通过“**抢占**”的方式，取得处理权。如果某个`worker`挂了，`master`会立刻感知到，用一个新的`worker`代替。这就是Nginx高效率的原因之一，也是可以平滑重启的原理。
 
-此外，`worker`进程是单线程的，没有阻塞的情况下，效率很高。而`epoll`模型避免了阻塞。
+此外，`worker`进程是单线程的，没有阻塞的情况下，效率很高。而epoll模型避免了阻塞。
 
-综上，**epoll机制**+**master-worker机制**使得`worker`进程可以高效率地执行单线程IO操作。
+综上，**epoll机制**+**master-worker机制**使得`worker`进程可以高效率地执行单线程I/O操作。
 
 ## Nginx高性能原因—协程机制
 
-nginx引入了一种比线程更小的概念，那就是“**协程**”。协程依附于内存模型，切换开销更小；遇到阻塞，nginx会立刻剥夺执行权；由于在同一个线程内，不需要加锁。
+Nginx引入了一种比线程更小的概念，那就是“**协程**”。协程依附于内存模型，切换开销更小；遇到阻塞，Nginx会立刻剥夺执行权；由于在同一个线程内，也不需要加锁。
 
 ## 小结
 
-这一节对单机系统进行了分布式扩展，使得吞吐量和响应时间有了一定提升。虽然提升不大，但是单个服务器的压力明显降低。
+这一节对单机系统进行了分布式扩展，使得吞吐量和响应时间都有了一定提升。虽然提升不大，但是单个服务器的压力明显降低。
 
 1. 首先把前端资源部署到了Nginx服务器。
 2. 然后把Nginx作为反向代理服务器，把后端项目部署到了另外两台服务器。
@@ -448,4 +500,334 @@ if(userModel==null){
 
 # 查询优化之多级缓存
 
-多级缓存有两层含义，一个是缓存，一个是多级。所谓缓存，
+多级缓存有两层含义，一个是**缓存**，一个是**多级**。我们知道，内存的速度是磁盘的成百上千倍，高并发下，从磁盘I/O十分影响性能。所谓缓存，就是将磁盘中的热点数据，暂时存到内存里面，以后查询直接从内存中读取，减少磁盘I/O，提高速度。所谓多级，就是在多个层次设置缓存，一个层次没有就去另一个层次查询。
+
+## 项目架构
+
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/frame4.png)
+
+## 优化商品查询接口—单机版Redis缓存
+
+之前的`ItemController.getItem`接口，来一个`Id`，就调用`ItemService`去数据库查询一次。`ItemService`会查三张表，分别是商品信息表`item`表、商品库存`stock`表和活动信息表`promo`，十分影响性能。
+
+所以修改`ItemController.getItem`接口，思路很简单，先从Redis服务器获取，若没有，则从数据库查询并存到Redis服务。有的话直接用。
+
+```java
+@RequestMapping(value = "/get",method = {RequestMethod.GET})
+@ResponseBody
+public CommonReturnType getItem(@RequestParam(name = "id")Integer id){
+    ItemModel itemModel=(ItemModel)redisTemplate.opsForValue().get("item_"+id);
+    //如果不存在，就执行下游操作，到数据查询
+    if(itemModel==null){
+        itemModel=itemService.getItemById(id);
+        //设置itemModel到redis服务器
+        redisTemplate.opsForValue().set("item_"+id,itemModel);
+        //设置失效时间
+        redisTemplate.expire("item_"+id,10, TimeUnit.MINUTES);
+    }
+    ItemVO itemVO=convertVOFromModel(itemModel);
+    return CommonReturnType.create(itemVO);
+}
+```
+
+### 序列化格式问题
+
+采用上述方式，存到Redis里面的VALUE是类似`/x05/x32`的二进制格式，我们需要自定义`RedisTemplate`的序列化格式。
+
+之前我们在`config`包下面创建了一个`RedisConfig`类，里面没有任何方法，接下来我们编写一个方法。
+
+```java
+@Bean
+public RedisTemplate redisTemplate(RedisConnectionFactory redisConnectionFactory){
+    RedisTemplate redisTemplate=new RedisTemplate();
+    redisTemplate.setConnectionFactory(redisConnectionFactory);
+    
+    //首先解决key的序列化格式
+    StringRedisSerializer stringRedisSerializer=new StringRedisSerializer();
+    redisTemplate.setKeySerializer(stringRedisSerializer);
+    
+    //解决value的序列化格式
+    Jackson2JsonRedisSerializer jackson2JsonRedisSerializer=new Jackson2JsonRedisSerializer(Object.class);
+    redisTemplate.setValueSerializer(jackson2JsonRedisSerializer);
+    
+    return redisTemplate;
+}
+```
+
+这样，`ItemModel`的内容就会以JSON的格式存储和显示。
+
+### 时间序列化格式问题
+
+但是这样对于日期而言，序列化后是一个很长的毫秒数。我们希望是`yyyy-MM-dd HH:mm:ss`的格式，还需要进一步处理。新建`serializer`包，里面新建两个类。
+
+```java
+public class JodaDateTimeJSONSerializer extends JsonSerializer<DateTime> {
+    @Override
+    public void serialize(DateTime dateTime, JsonGenerator jsonGenerator, SerializerProvider serializerProvider) throws IOException {
+        jsonGenerator.writeString(dateTime.toString("yyyy-MM-dd HH:mm:ss"));
+    }
+}
+```
+
+```java
+public class JodaDateTimeDeserializer extends JsonDeserializer<DateTime> {
+    @Override
+    public DateTime deserialize(JsonParser jsonParser, DeserializationContext deserializationContext) throws IOException, JsonProcessingException {
+        String dateString = jsonParser.readValueAs(String.class);
+        DateTimeFormatter formatter=DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss");
+        return DateTime.parse(dateString,formatter);
+    }
+}
+```
+
+回到`RedisConfig`类里面：
+
+```java
+public RedisTemplate redisTemplate(RedisConnectionFactory redisConnectionFactory){
+    ···
+    //解决日期的序列化格式
+    ObjectMapper objectMapper=new ObjectMapper();
+    SimpleModule simpleModule=new SimpleModule();
+    simpleModule.addSerializer(DateTime.class,new JodaDateTimeJSONSerializer());
+    simpleModule.addDeserializer(DateTime.class,new JodaDateTimeDeserializer());
+    objectMapper.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL);
+    objectMapper.registerModule(simpleModule);
+    jackson2JsonRedisSerializer.setObjectMapper(objectMapper);
+    redisTemplate.setValueSerializer(jackson2JsonRedisSerializer);
+    return redisTemplate;
+}
+```
+
+这样就规范了时间类型的序列化格式。
+
+## 优化商品查询接口—本地热点缓存
+
+Redis缓存虽好，但是有网络I/O，没有本地缓存快。我们可以在Redis的前面再添加一层“**本地热点**”缓存。所谓**本地**，就是利用**本地JVM的内存**。所谓**热点**，由于JVM内存有限，仅存放**多次查询**的数据。
+
+本地缓存，说白了就是一个`HashMap`，但是`HashMap`不支持并发读写，肯定是不行的。`j.u.c`包里面的`ConcurrentHashMap`虽然也能用，但是无法高效处理过期时限、没有淘汰机制等问题，所以这里使用了`Google`的`Guava Cache`方案。
+
+`Guava Cache`除了线程安全外，还可以控制超时时间，提供淘汰机制。
+
+引用`google.guava`包后，在`service`包下新建一个`CacheService`类。
+
+```java
+@Service
+public class CacheServiceImpl implements CacheService {
+    private Cache<String,Object> commonCache=null;
+    @PostConstruct
+    public void init(){
+        commonCache= CacheBuilder.newBuilder()
+                //初始容量
+                .initialCapacity(10)
+                //最大100个KEY，超过后会按照LRU策略移除
+                .maximumSize(100)
+                //设置写缓存后多少秒过期，还有根据访问过期即expireAfterAccess
+                .expireAfterWrite(60, TimeUnit.SECONDS)
+                .build();
+    }
+
+    @Override
+    public void setCommonCache(String key, Object value) {
+       commonCache.put(key,value);
+    }
+
+    @Override
+    public Object getFromCommonCache(String key) {
+        return commonCache.getIfPresent(key);
+    }
+}
+```
+
+在`ItemController`里面，首先从本地缓存中获取，如果本地缓存没有，就去Redis里面获取，如果Redis也没有，就去数据库查询并存放到Redis里面。如果Redis里面有，将其获取后存到本地缓存里面。
+
+```java
+public CommonReturnType getItem(@RequestParam(name = "id")Integer id){
+    ItemModel itemModel=null;
+    //第一级：先去本地缓存
+    itemModel=(ItemModel)cacheService.getFromCommonCache("item_"+id);
+    if(itemModel==null){
+        //第二级：从redis里面获取
+        itemModel=(ItemModel)redisTemplate.opsForValue().get("item_"+id);
+        //如果不存在，就执行下游操作，到数据查询
+        if(itemModel==null){
+            itemModel=itemService.getItemById(id);
+            //设置itemModel到redis服务器
+            redisTemplate.opsForValue().set("item_"+id,itemModel);
+            //设置失效时间
+            redisTemplate.expire("item_"+id,10, TimeUnit.MINUTES);
+        }
+        //填充本地缓冲
+        cacheService.setCommonCache("item_"+id,itemModel);
+    }
+    ItemVO itemVO=convertVOFromModel(itemModel);
+    return CommonReturnType.create(itemVO);
+}
+```
+
+### 本地缓存缺点
+
+本地缓存虽快，但是也有缺点：
+
+1. 更新麻烦，容易产生脏缓存。
+2. 受到JVM容量的限制。
+
+## 缓存优化后的效果
+
+- 之前进行分布式扩展后，发送1000*20个请求，TPS在**1700**左右，平均响应时间**350**毫秒左右。
+- 引入Redis缓存后，TPS峰值达到了**2100**左右，平均响应时间**250**毫秒左右，Redis服务器压力不大，还可以继续加并发量。
+- 引入本地缓存后，发现提升**十分巨大**，TPS峰值高达**3600**多，平均响应时间只有**38**毫秒左右。
+
+再次压测1000*40个请求，发现TPS峰值高达**4100**多，平均响应时间在**145**毫秒左右。Redis服务器压力更小了，因为都被本地缓存拦截了。
+
+## Nginx Proxy Cache缓存
+
+通过Redis缓存，避免了MySQL大量的重复查询，提高了部分效率；通过本地缓存，减少了与Redis服务器的网络I/O，提高了大量效率。但实际上，前端（客户端）请求Nginx服务器，Nginx有分发过程，需要去请求后面的两台应用服务器，有一定网络I/O，能不能直接把**热点数据存放到Nginx服务器上**呢？答案是可以的。
+
+Nginx Proxy Cache的原理是基于**文件系统**的，它把后端返回的响应内容，作为**文件**存放在Nginx指定目录下。
+
+在`nginx.conf`里面配置`proxy cache`：
+
+```text
+upstream backend_server{
+    server miaoshaApp1_ip weight=1;
+    server miaoshaApp2_ip weight=1;
+}
+#申明一个cache缓存节点 evels 表示以二级目录存放
+    proxy_cache_path /usr/local/openresty/nginx/tmp_cache levels=1:2 keys_zone=tmp_cache:100m inactive=7d max_size=10g;
+...
+server{
+    location / {
+        ···
+        #proxy_cache 目录
+        proxy_cache tmp_cache;
+        proxy_cache_key $uri;
+        #只有后端返回以下状态码才缓存
+        proxy_cache_valid 200 206 304 302 7d;
+    }
+}
+```
+
+这样，当多次访问后端商品详情接口时，在`nginx/tmp_cache/dir1/dir2`下生成了一个**文件**。`cat`这个文件，发现就是JSON格式的数据。
+
+### Nginx Proxy Cache缓存效果
+
+发现TPS峰值只有**2800**左右，平均响应时间**225**毫秒左右，**不升反降**，这是为什么呢？原因就是，虽然用户可以直接从Nginx服务器拿到缓存的数据，但是这些数据是基于**文件系统**的，是存放在**磁盘**上的，有**磁盘I/O**，虽然减少了一定的网络I/O，但是磁盘I/O并没有内存快，得不偿失，所以不建议使用。
+
+## Nginx lua脚本
+
+那Nginx有没有一种基于“内存”的缓存策略呢？答案也是有的，可以使用Nginx lua脚本来做缓存。
+
+lua也是基于协程机制的。
+
+- 依附于线程的内存模型，切换开销小。
+- 遇到阻塞则释放执行权，代码同步。
+- 无需加锁。
+
+lua脚本可以挂载在Nginx处理请求的起始、worker进程启动、内容输出等阶段。
+
+### lua脚本实战
+
+在OpenResty下新建一个lua文件夹，专门用来存放lua脚本。新建一个`init.lua`。
+
+```lua
+ngx.log(ngx.ERR, "init lua success");
+```
+
+在`nginx.conf`里面添加一个`init_by_lua_file`的字段，指定上述lua脚本的位置。这样，当Nginx启动的时候，就会执行这个lua脚本，输出"init lua success"。
+
+------
+
+当然，在Nginx启动的时候，挂载lua脚本并没有什么作用。一般在内容输出阶段，挂载lua脚本。
+
+新建一个`staticitem.lua`，用`ngx.say()`输出一段字符串。在`nginx.conf`里面添加一个新的location：
+
+```text
+location /staticitem/get{
+    default_type "text/html";
+    content_by_lua_file ../lua/staticitem.lua;
+}
+```
+
+访问`/staticitem/get`，在页面就会响应出`staticitem.lua`的内容。
+
+------
+
+新建一个`helloworld.lua`，使用`ngx.exec("/item/get?id=1")`访问某个URL。同样在`nginx.conf`里面添加一个`helloworld`location。这样，当访问`/helloworld`的时候就会跳转到`item/get?id=1`这个URL上。
+
+## OpenResty—Shared dic
+
+OpenResty对Nginx进行了扩展，添加了很多功能，比如继承了lua开发环境、提供了对MySQL、Redis、Memcached的支持等。比原版Nginx使用起来更加方便。
+
+OpenResty的Shared dic是一种类似于`HashMap`的Key-Value**内存**结构，对所有`worker`进程可见，并且可以指定LRU淘汰规则。
+
+和配置`proxy cache`一样，我们需要指定一个名为`my_cache`，大小为128m的`lua_shared_dict`：
+
+```text
+upstream backend_server
+···
+lua_shared_dict my_cahce 128m;
+```
+
+在lua文件夹下，新建一个`itemshareddict.lua`脚本，编写两个函数。
+
+```lua
+function get_from_cache(key)
+    --类似于拿到缓存对象
+    local cache_ngx = ngx.shared.my_cache
+    --从缓存对象中，根据key获得值
+    local value = cache_ngx.get(key)
+    return value
+end
+
+function set_to_cache(key,value,exptime)
+    if not exptime then 
+        exptime = 0
+    end
+    local cache_ngx = ngx.shared.my_cache
+    local succ,err,forcible = cache_ngx.set(key,value,exptime)
+    return succ 
+end
+```
+
+然后编写“main"函数：
+
+```lua
+--得到请求的参数，类似Servlet的request.getParameters
+local args = ngx.req.get_uri_args()
+local id = args["id"]
+--从缓存里面获取商品信息
+local item_model = get_from_cache("item_"..id)
+if item_model == nil then
+    --如果取不到，就请求后端接口
+    local resp = ngx.location.capture("/item/get?id="..id)
+    --将后端返回的json响应，存到缓存里面
+    item_model = resp.body
+    set_to_cache("item_"..id,item_model,1*60)
+end
+ngx.say(item_model)
+```
+
+新建一个`luaitem/get`的location，注意`default_type`是json。
+
+```text
+location /luaitem/get{
+    default_type "application/json";
+    content_by_lua_file ../lua/itemshareddict.lua;
+}
+```
+
+### Shared dict缓存效果
+
+压测`/luaitem/get`，峰值TPS在**4000**左右，平均响应时间**150ms**左右，比`proxy cache`要高出不少，跟使用两层缓存效果差不多。
+
+使用Ngxin的Shared dict，**把压力转移到了Nginx服务器**，**后面两个Tomcat服务器压力减小**。同时**减少了与后面两个Tomcat服务器、Redis服务器和数据库服务器的网络I/O**，当网络I/O成为瓶颈时，Shared dict不失为一种好方法。
+
+最后，Shared dict依然受制于缓存容量和缓存更新问题。
+
+## 小结
+
+本节首先使用**Redis**对商品详情信息进行了缓存。然后使用本地缓存**guava**在Redis之前再做一层缓存。随后，本节尝试了将缓存提前，提到离客户端更近的Nginx服务器上，减少网络I/O，开启了Nginx的**proxy cache**，但是由于proxy cache是基于文件系统的，有磁盘I/O，效果得不偿失。最后，本节使用**OpenResty Shared Dict+Nginx+Lua**将Nginx的缓存从磁盘提到内存，提升了性能。
+
+## 接下来的优化方向
+
+现在的架构，**前端资源每次都要进行请求**，能不能像缓存数据库数据一样，对**前端资源进行缓存呢**？答案也是可以的，下一章将讲解静态资源CDN，将页面静态化。
