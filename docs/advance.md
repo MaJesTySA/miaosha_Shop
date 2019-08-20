@@ -850,3 +850,183 @@ location /luaitem/get{
 ## 接下来的优化方向
 
 现在的架构，**前端资源每次都要进行请求**，能不能像缓存数据库数据一样，对**前端资源进行缓存呢**？答案也是可以的，下一章将讲解静态资源CDN，将页面静态化。
+
+# 查询优化之页面静态化
+
+## 项目架构
+
+之前静态资源是直接从Nginx服务器上获取，而现在会先去CDN服务器上获取，如果没有则回源到Nginx服务器上获取。
+
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/cdn.png)
+
+## CDN
+
+CDN是内容分发网络，一般用来存储（缓存）项目的静态资源。访问静态资源，会从离用户**最近**的CDN服务器上返回静态资源。如果该CDN服务器上没有静态资源，则会执行**回源**操作，从Nginx服务器上获取静态资源。
+
+### CDN使用
+
+1. 购买一个CDN服务器，选择要加速的域名（比如`miaoshaserver.jiasu.com`），同时要填写**源站**IP，也就是Nginx服务器，便于回源操作。
+2. 接下来要配置`miaoshaserver.jiasu.com`的DNS解析规则。一般的解析规则是`A记录类型`，也就是把一个域名直接解析成**IP地址**。这里使用`CNAME`进行解析，将一个域名解析到另外一个域名。而这个”另一个域名“是云服务器厂商提供的，它会把请求解析到相应的CDN服务器上。
+3. 访问`miaoshaserver.jiasu.com/resources/getitem.html?id=1`即可以CDN的方式访问静态资源。
+
+### CDN优化效果
+
+- 没有使用CDN优化：发送500*20个请求，TPS在**700**左右，平均响应时间**400ms**。
+- 使用了CDN优化：TPS在**1300**左右，平均响应时间**150ms**，可见优化效果还是很好的。
+
+### CDN深入—cache controll响应头
+
+在响应里面有一个`cache controll`响应头，这个响应头表示**客户端是否可以缓存响应**。有以下几种缓存策略：
+
+| 策略        | 说明                                                   |
+| ----------- | ------------------------------------------------------ |
+| private     | 客户端可以缓存                                         |
+| public      | 客户端和代理服务器都可以缓存                           |
+| max-age=xxx | 缓存的内容将在xxx秒后失效                              |
+| no-cache    | 也会缓存，但是使用缓存之前会询问服务器，该缓存是否可用 |
+| no-store    | 不缓存任何响应内容                                     |
+
+#### 选择缓存策略
+
+如果不缓存，那就选择`no-store`。如果需要缓存，但是需要重新验证，则选择`no-cache`；如果不需要重新验证，则选择`private`或者`public`。然后设置`max-age`，最后添加`ETag Header`。
+
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/choosehead.png" width=60% />
+
+#### 有效性验证
+
+**ETag**：第一次请求资源的时候，服务器会根据**资源内容**生成一个**唯一标示ETag**，并返回给浏览器。浏览器下一次请求，会把**ETag**（If-None-Match）发送给服务器，与服务器的ETag进行对比。如果一致，就返回一个**304**响应，即**Not Modify**，**表示浏览器缓存的资源文件依然是可用的**，直接使用就行了，不用重新请求。
+
+#### 请求资源流程
+
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/requestResrProcess.png" width=80% />
+
+### CDN深入—浏览器三种刷新方式
+
+#### a标签/回车刷新
+
+查看`max-age`是否有效，有效直接从缓存中获取，无效进入缓存协商逻辑。
+
+#### F5刷新
+
+取消`max-age`或者将其设置为0，直接进入缓存协商逻辑。
+
+#### CTRL+F5强制刷新
+
+直接去掉`cache-control`和协商头，重新请求资源。
+
+### CDN深入—自定义缓存策略
+
+CDN服务器，既充当了浏览器的服务端，又充当了Nginx的客户端。所以它的缓存策略尤其虫咬。除了按照服务器的`max-age`，CDN服务器还可以自己设置过期时间。
+
+**总的规则就是**：源站没有配置，遵从CDN控制台的配置；CDN控制台没有配置，遵从服务器提供商的默认配置。源站有配置，CDN控制台有配置，遵从CDN控制台的配置；CDN控制台没有配置，遵从源站配置。
+
+### CDN深入—静态资源部署策略
+
+#### 部署窘境
+
+假如服务器端的静态资源更新了，但是由于客户端的`max-age`还未失效，用的还是老的资源，文件名又一样，用户不得不使用CTRL+F5强制刷新，才能请求更新的静态资源。
+
+#### 解决方法
+
+1. **版本号**：在静态资源文件后面追加一个版本号，比如`a.js?v=1.0`。这种方法维护起来十分麻烦，比如只有一个`js`文件做了修改，那其它`html`、`css`文件要不要追加版本号呢？
+2. **摘要**：对静态资源的内容进行哈希操作，得到一个摘要，比如`a.js?v=45edw`，维护起来更加方法。但是会导致是先部署`js`还是先部署`html`的问题。比如先部署`js`，那么`html`页面引用的还是老的`js`，`js`直接失效；如果先部署`html`，那么引用的`js`又是老版本的`js`。
+3. **摘要作为文件名**：比如`45edw.js`，会同时存在新老两个版本，方便回滚。
+
+## 全页面静态化
+
+现在的架构是，用户通过CDN请求到了静态资源，然后静态页面会在加载的时候，发送一个Ajax请求到后端，接收到后端的响应后，再用**DOM渲染**。也就是每一个用户请求，都有一个**请求后端接口**并**渲染**的过程。那能不能取消这个过程，直接在服务器端把页面渲染好，返回一个纯`html`文件给客户端呢？
+
+```javascript
+//页面加载完成
+jQuery(document).ready(function(){
+    //请求后端接口
+    $.ajax({
+        ···
+        //接受到响应
+        success: function(){
+        //根据响应填充标签
+        reloadDom();
+    }
+    })
+})
+```
+
+### phantomJS实现全页面静态化
+
+phantomJS就像一个爬虫，会把页面中的JS执行完毕后，返回一个渲染完成的`html`文件。
+
+```javascript
+//引入包
+var page = require("webpage").create();
+var fs = require("fs");
+page.open("http://miaoshaserver/resources/getitem.html?id=2",function(status){
+    setTimeout(function(){
+        fs.write("getitem.html",page.content,"w");
+        phantom.exit();
+    },1000);
+})
+```
+
+打开`getitem.hmtl`，发现里面的标签都正确填充了，但是**还是发送了一次Ajax请求**，这不是我们想看到的。原因就在于，就算页面渲染完毕，Ajax请求的代码块仍然存在，仍然会发送。
+
+在页面中添加一个隐藏域：`<input type="hidden" id="isInit" value="0"/>`。
+
+新增`hasInit`、`setHasInit`、`initView`三个函数。
+
+```javascript
+function hasInit() {
+    var isInit = $("#isInit").val();
+    return isInit;
+}
+
+function setHasInit() {
+    $("#isInit").val("1");
+}
+
+function initView() {
+    var isInit = hasInit();
+    //如果渲染过，直接返回
+    if (isInit == "1") return;
+    //否则发送ajax请求
+    $.ajax({
+        ···
+        success: function (data) {
+            if (data.status == "success") {
+                global_itemVO = data.data;
+                //渲染页面
+                reloadDom();
+                setInterval(reloadDom, 1000);
+                //将isInit的值设为1
+                setHasInit();
+            } 
+        ···
+}
+```
+
+修改phantomJS代码。
+
+```javascript
+var page = require("webpage").create();
+var fs = require("fs");
+page.open("http://miaoshaserver/resources/getitem.html?id=2",function(status){
+    //每隔1秒就尝试一次，防止JS没加载完
+    var isInit = "0";
+    setInterval(function(){
+        if(isInit != "1"){
+            //手动执行一次initView
+            page.evaluate(function(){
+                initView();
+            })
+            //手动设置hasInit
+            isInit = page.evaluate(function(){
+                return hasInit();
+            })
+        } else {
+            fs.write("getitem.html",page.content,"w");
+            phantom.exit();
+        }
+    },1000);
+})
+```
+
+这样，当页面第一次加载时，`hasInit=0`，那么会发送Ajax请求并渲染页面，渲染完毕后，将`hasInit`置为1。当页面第二次加载时，由于`hasInit=1`，不会再次发送Ajax请求页面。
