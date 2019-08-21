@@ -1,5 +1,7 @@
 # 慕课网【Spring Boot构建电商基础秒杀项目 】＋【性能优化，打造亿级秒杀系统】源码、笔记和解析
 
+慕课网[Spring Boot构建电商基础秒杀项目](https://www.imooc.com/learn/1079)免费课程和[性能优化，打造亿级秒杀系统](https://coding.imooc.com/class/338.html)实战课程 源码、笔记和解析。老师讲得非常不错，干货满满，全程高能，强烈推荐。
+
 # 基础项目
 
 [Spring Boot构建电商基础秒杀项目笔记](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/base.md)
