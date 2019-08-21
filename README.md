@@ -113,3 +113,7 @@
   - 全页面静态化
     - phantomJS实现全页面静态化
 
+------
+
+[性能优化，打造亿级秒杀系统项目笔记 【下】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p2.md)
+
