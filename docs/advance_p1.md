@@ -77,7 +77,7 @@
 
 [【基础项目笔记】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/base.md)
 
-[【进阶项目笔记 下】]()
+[【进阶项目笔记 下】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p2.md)
 
 # 进阶项目核心知识点
 
@@ -1035,5 +1035,5 @@ page.open("http://miaoshaserver/resources/getitem.html?id=2",function(status){
 
 ------
 
-[性能优化，打造亿级秒杀系统项目笔记 【下】]()，包含**交易性能优化之缓存库存**，**交易性能优化之事务型消息**，**流量削峰技术**和**防刷限流技术**。
+[性能优化，打造亿级秒杀系统项目笔记 【下】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p2.md)，包含**交易性能优化之缓存库存**，**交易性能优化之事务型消息**，**流量削峰技术**和**防刷限流技术**。
 
