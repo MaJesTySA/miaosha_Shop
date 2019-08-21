@@ -1,6 +1,4 @@
-# 慕课网Spring Boot构建电商基础秒杀项目源码+解析
-
-慕课网上一个[Spring Boot构建电商基础秒杀项目的课程](https://www.imooc.com/learn/1079)，老师讲得很不错。
+[【进阶项目笔记 上】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p1.md)
 
 ------
 
@@ -635,5 +633,5 @@ orderModel.setPromoId(promoId);
 - 下单操作多、缓慢
 - 浪涌流量如何解决
 
-项目进阶请看[秒杀项目进阶](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p1.md)。
+项目进阶请看[【秒杀项目进阶 上】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p1.md)。
 
