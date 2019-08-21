@@ -75,7 +75,9 @@
 
 慕课网上一个非常不错的分布式秒杀商城的课程，老师讲得非常棒，全程高能，干货满满，尊重知识产权，贴上[课程地址](https://coding.imooc.com/class/338.html)。
 
-------
+[【基础项目笔记】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/base.md)
+
+[【进阶项目笔记 下】]()
 
 # 进阶项目核心知识点
 
@@ -1030,3 +1032,8 @@ page.open("http://miaoshaserver/resources/getitem.html?id=2",function(status){
 ```
 
 这样，当页面第一次加载时，`hasInit=0`，那么会发送Ajax请求并渲染页面，渲染完毕后，将`hasInit`置为1。当页面第二次加载时，由于`hasInit=1`，不会再次发送Ajax请求页面。
+
+------
+
+[性能优化，打造亿级秒杀系统项目笔记 【下】]()，包含**交易性能优化之缓存库存**，**交易性能优化之事务型消息**，**流量削峰技术**和**防刷限流技术**。
+
