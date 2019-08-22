@@ -67,7 +67,7 @@ public ItemModel getItemByIdInCache(Integer id) {
 
 ### 索引优化
 
-之前扣减库存的操作，会执行`update stock set stock = stock -#{amount} where item_id = #{itemId} and stock >= #{amount}`这条SQL语句。如果`where`条件的**`item_id`字段没有索引**，**那么会锁表**，性能很低。所以先查看`item_id`字段是否有索引，没有的话，使用`alter table stock add UNIQUE INDEX item_id_index(item_id)`，为`item_id`字段添加一个**唯一索引**，这样在修改的时候，只会**锁行**。
+之前扣减库存的操作，会执行`update stock set stock = stock -#{amount} where item_id = #{itemId} and stock >= #{amount}`这条SQL语句。如果`where`条件的`item_id`字段没有**索引**，那么会**锁表**，性能很低。所以先查看`item_id`字段是否有索引，没有的话，使用`alter table stock add UNIQUE INDEX item_id_index(item_id)`，为`item_id`字段添加一个**唯一索引**，这样在修改的时候，只会**锁行**。
 
 ### 库存扣减缓存优化
 
@@ -132,7 +132,7 @@ public class MqProducer {
     @Value("${mq.topicname}")
     private String topicName;
    
-	@PostConstruct
+    @PostConstruct
     public void init() throws MQClientException {
         //Producer初始化，Group对于生产者没有意义，但是消费者有意义
         producer=new DefaultMQProducer("producer_group");
@@ -142,7 +142,7 @@ public class MqProducer {
 }
 ```
 
-编写`asycnReduceStock`方法，实现异步扣减库存。
+编写`asyncReduceStock`方法，实现异步扣减库存。
 
 ```java
 public boolean asyncReduceStock(Integer itemId, Integer amount)  {
@@ -157,9 +157,10 @@ public boolean asyncReduceStock(Integer itemId, Integer amount)  {
         producer.send(message);
     } catch (MQClientException e) {
       ···
-    return false;
+        return false;
     }
-return true;
+    return true;
+}
 ```
 
 新建一个`mq.MqConsumer`类，与`MqProducer`类类似，也有一个`init`方法，实现**异步扣减库存**的逻辑。
@@ -176,6 +177,7 @@ public class MqConsumer {
     @PostConstruct
     public void init() throws MQClientException {
         consumer=new DefaultMQPushConsumer("stock_consumer_group");
+        //监听名为topicName的话题
         consumer.setNamesrvAddr(nameAddr);
         //监听topicName话题下的所有消息
         consumer.subscribe(topicName,"*");
@@ -229,7 +231,7 @@ public boolean decreaseStock(Integer itemId, Integer amount) {
 #### 异步扣减库存存在的问题
 
 1. 如果发送消息失败，只能回滚Redis。
-2. 消费端从数据库扣减操作执行失败，如何处理？（这里默认会成功）
+2. 消费端从数据库扣减操作执行失败，如何处理（这里默认会成功）？
 3. 下单失败无法正确回补库存（比如用户取消订单）。
 
 所以需要引入**事务型消息**。
