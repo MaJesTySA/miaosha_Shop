@@ -236,3 +236,176 @@ public boolean decreaseStock(Integer itemId, Integer amount) {
 
 所以需要引入**事务型消息**。
 
+## 小结
+
+这一章我们
+
+1. 首先对**交易验证**进行了优化，把对用户、商品、活动的查询从数据库转移到了缓存中，优化效果明显。
+2. 随后，我们优化了减库存的逻辑，一是添加了索引，从锁表变成了锁行；二是将减库存的操作也移到了缓存中，先从缓存中扣，再从数据库扣。这就涉及到了**异步减库存**，所以需要引入**消息中间件**。
+
+## 接下来的优化方向
+
+正如**异步扣减库存存在的问题**所述，这么处理还有许多漏洞，下一章将会详解。
+
+# 交易优化之事务型消息
+
+## 异步消息发送时机问题
+
+目前扣减库存的事务`ItemService.decreaseStock`是封装在`OrderService.createOrder`事务里面的。在扣减Redis库存、发送异步消息之后，还有订单入库、增加销量的操作。如果这些操作失败，那么`createOrder`**事务会回滚**，`decreaseStock`**事务也回滚**，但是Redis的**扣减操作却不能回滚**，会导致数据不一致。
+
+### 解决方法
+
+解决的方法就是在订单入库、增加销量成功之后，再发送异步消息，`ItemService.decreaseStock`只**负责扣减Redis库存**，**不发送异步消息**。
+
+```java
+public boolean decreaseStock(Integer itemId, Integer amount) {
+    long affectedRow=redisTemplate.opsForValue().
+                increment("promo_item_stock_"+itemId,amount.intValue()*-1);
+    //>0，表示Redis扣减成功
+    if(affectedRow>=0){
+        //抽离了发送异步消息的逻辑
+        return true;
+    } else {
+        //Redis扣减失败，回滚
+        increaseStock(itemId, amount)
+        return false;
+    }
+}
+
+public boolean increaseStock(Integer itemId, Integer amount) {
+    redisTemplate.opsForValue().increment("promo_item_stock_"+itemId,amount.intValue());
+    return true;
+}
+```
+
+将发送异步消息的逻辑抽取出来：
+
+```java
+//ItemService
+public boolean asyncDecreaseStock(Integer itemId, Integer amount) {
+    return mqProducer.asyncReduceStock(itemId, amount);
+}
+```
+
+再在`OrderService.createOrder`里面调用：
+
+```java
+···
+//订单入库
+orderDOMapper.insertSelective(orderDO);
+//销量增加
+itemService.increaseSales(itemId,amount);
+//执行完最后一步才发送异步消息
+boolean mqResult=itemService.asyncDecreaseStock(itemId,amount);
+    if(!mqResult){
+        //回滚redis库存
+        itemService.increaseStock(itemId,amount);
+        throw new BizException(EmBizError.MQ_SEND_FAIL);
+    }
+```
+
+这样，就算订单入库失败、销量增加失败、消息发送失败，都能保证缓存和数据库的一致性。
+
+## 事务提交问题
+
+但是这么做，依然有问题。Spring的`@Transactional`标签，会在**事务方法返回后才提交**，如果提交的过程中，发生了异常，则数据库回滚，但是Redis库存已扣，还是无法保证一致性。我们需要在**事务提交成功后**，**再发送异步消息**。
+
+### 解决方法
+
+Spring给我们提供了`TransactionSynchronizationManager.registerSynchronization`方法，这个方法的传入一个`TransactionSynchronizationAdapter`的匿名类，通过`afterCommit`方法，在**事务提交成功后**，执行**发送消息操作**。
+
+```java
+TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
+    @Override
+    public void afterCommit() {
+    boolean mqResult=itemService.asyncDecreaseStock(itemId,amount);
+    if(!mqResult){
+        itemService.increaseStock(itemId,amount);
+        throw new BizException(EmBizError.MQ_SEND_FAIL);
+    }
+}
+```
+
+## 事务型消息
+
+上面的做法，依然不能保证万无一失。假设现在**事务提交成功了**，等着执行`afterCommit`方法，这个时候**突然宕机了**，那么**订单已然入库**，**销量已然增加**，但是**去数据库扣减库存的这条消息**却“**丢失**”了。这里就需要引入RocketMQ的事务型消息。
+
+所谓事务型消息，也会被发送到消息队列里面，这条消息处于`prepared`状态，`broker`会接受到这条消息，**但是不会把这条消息给消费者消费**。
+
+处于`prepared`状态的消息，会执行`TransactionListener`的`executeLocalTransaction`方法，根据执行结果，**改变事务型消息的状态**，**让消费端消费或是不消费**。
+
+在`mq.MyProducer`类里面新注入一个`TransactionMQProducer`类，与`DefaultMQProducer`类似，也需要设置服务器地址、命名空间等。
+
+新建一个`transactionAsyncReduceStock`的方法，该方法使用**事务型消息**进行异步扣减库存。
+
+```java
+// 事务型消息同步库存扣减消息
+public boolean transactionAsyncReduceStock(Integer userId, Integer itemId, Integer promoId, Integer amount, String stockLogId) {
+    Map<String, Object> bodyMap = new HashMap<>();
+    bodyMap.put("itemId", itemId);
+    bodyMap.put("amount", amount);
+    //用于执行orderService.createOrder的传参
+    Map<String, Object> argsMap = new HashMap<>();
+    argsMap.put("itemId", itemId);
+    argsMap.put("amount", amount);
+    argsMap.put("userId", userId);
+    argsMap.put("promoId", promoId);
+
+    Message message = new Message(topicName, "increase",
+                JSON.toJSON(bodyMap).toString().getBytes(Charset.forName("UTF-8")));
+    try {
+        //注意，发送的是sendMessageInTransaction
+        transactionMQProducer.sendMessageInTransaction(message, argsMap);
+    } catch (MQClientException e) {
+        e.printStackTrace();
+        return false;
+    }
+    return true;
+}
+```
+
+这样，就会发送一个事务型消息到`broke`，而处于`prepared`状态的事务型消息，会执行`TransactionListener`的`executeLocalTransaction`方法：
+
+```java
+transactionMQProducer.setTransactionListener(new TransactionListener() {
+    @Override
+    public LocalTransactionState executeLocalTransaction(Message message, Object args) {
+    //在事务型消息中去进行下单
+    Integer itemId = (Integer) ((Map) args).get("itemId");
+    Integer promoId = (Integer) ((Map) args).get("promoId");
+    Integer userId = (Integer) ((Map) args).get("userId");
+    Integer amount = (Integer) ((Map) args).get("amount");
+    try {
+        //调用下单接口
+        orderService.createOrder(userId, itemId, promoId, amount);
+    } catch (BizException e) {
+        e.printStackTrace();
+        //发生异常就回滚消息
+        return LocalTransactionState.ROLLBACK_MESSAGE;
+    }
+    return LocalTransactionState.COMMIT_MESSAGE;
+}
+```
+
+这样，在**事务型消息中去执行下单操作**，下单失败，则消息回滚，**不会去数据库扣减库存**。下单成功，则消息被消费，**扣减数据库库存**。
+
+### 更新下单流程
+
+之前的下单流程是：在`OrderController`里面调用了`OrderService.createOrder`方法，然后在该方法最后发送了异步消息，会导致异步消息丢失的问题。所以我们引入了**事务型消息**。
+
+现在的下单流程是：在`OrderController`里面直接调用`MqProducer.transactionAsyncReduceStock`方法，发送一个事务型消息，然后在**事务型消息中调用`OrderService.createOrder`方法**，进行下单。
+
+## 小结
+
+这一章我们
+
+1. 首先解决了**发送异步消息时机**的问题，之前是在`ItemService.decreaseStock`，当在Redis里面扣减成功后，发送异步消息。这样会导致数据库回滚，但Redis无法回滚的问题。所以我们把发送异步消息提到所有下单操作完成之后。
+2. 其次，由于Spring的`@Transactional`标签是在方法返回后，才提交事务，如果返回阶段出了问题，那么数据库回滚了，但是缓存的库存却扣了。所以，我们使用了**`afterCommit`**方法。
+3. 最后，如果在执行`afterCommit`的时候，发生了异常，那么消息就发不出去，又会导致数据一致性问题。所以我们通过使用**事务型消息**，把**下单操作包装在异步扣减消息里面**，让下单操作跟扣减消息**同生共死**。
+
+## 接下来的优化方向
+
+不要以为这样就万事大吉了，上述流程还有一个漏洞，就是当执行`orderService.createOrder`后，突然**又宕机了**，根本没有返回，这个时候事务型消息就会进入`UNKOWN`状态，我们需要处理这个状态。
+
+在匿名类`TransactionListener`里面，还需要覆写`checkLocalTransaction`方法，这个方法就是用来处理`UNKOWN`状态的。应该怎么处理？这就需要引入**库存流水**。
+
