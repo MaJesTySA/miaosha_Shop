@@ -561,4 +561,170 @@ String stockLogId = itemService.initStockLog(itemId, amount);
 
 ## 接下来的优化方向
 
-接下来会引入流量削峰技术，防止下单接口被黄牛狂刷。
+接下来会引入流量削峰技术。
+
+# 流量削峰
+
+秒杀秒杀，就是在活动开始的一瞬间，有大量流量涌入，优化不当，会导致服务器停滞，甚至宕机。所以引入流量削峰技术十分有必要。
+
+## 业务解耦—秒杀令牌
+
+之前的**验证逻辑**和**下单逻辑**都耦合在`OrderService.createOrder`里面，现在利用秒杀令牌，使校验逻辑和下单逻辑分离。
+
+`PromoService`新开一个`generateSecondKillToken`，将活动、商品、用户信息校验逻辑封装在里面。
+
+```java
+public String generateSecondKillToken(Integer promoId,Integer itemId,Integer userId) {
+    //判断库存是否售罄，若Key存在，则直接返回下单失败
+    if(redisTemplate.hasKey("promo_item_stock_invalid_"+itemId))
+        return null;
+    PromoDO promoDO=promoDOMapper.selectByPrimaryKey(promoId);
+    PromoModel promoModel=convertFromDataObj(promoDO);
+    if(promoModel==null) return null;
+    if(promoModel.getStartDate().isAfterNow()) {
+        promoModel.setStatus(1);
+    }else if(promoModel.getEndDate().isBeforeNow()){
+        promoModel.setStatus(3);
+    }else{
+        promoModel.setStatus(2);
+    }
+    //判断活动是否正在进行
+    if(promoModel.getStatus()!=2) return null;
+    //判断item信息是否存在
+    ItemModel itemModel=itemService.getItemByIdInCache(itemId);
+    if(itemModel==null) return null;
+    //判断用户是否存在
+    UserModel userModel=userService.getUserByIdInCache(userId);
+    if(userModel==null) return null;
+    //生成Token，并且存入redis内，5分钟时限
+    String token= UUID.randomUUID().toString().replace("-","");
+    redisTemplate.opsForValue().set("promo_token_"+promoId+"_userid_"+userId+"_itemid_"+itemId,token);
+    redisTemplate.expire("promo_token_"+promoId+"_userid_"+userId+"_itemid_"+itemId, 5,TimeUnit.MINUTES);
+        return token;
+}
+```
+
+这样，`OrderService.createOrder`的校验逻辑就可以删掉了。
+
+`OrderController`新开一个`generateToken`接口，以便前端请求，返回令牌。
+
+```java
+@RequestMapping(value = "/generatetoken",···)
+@ResponseBody
+public CommonReturnType generateToken(···) throws BizException {
+    //用户登录状态校验
+    ···
+    //获取秒杀访问令牌
+    String promoToken = promoService.generateSecondKillToken(promoId, itemId, userModel.getId());
+if (promoToken == null)
+    throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "生成令牌失败");
+return CommonReturnType.create(promoToken);
+}
+```
+
+前端在点击“**下单**”后，首先会请求`generateToken`接口，返回秒杀令牌。然后将秒杀令牌`promoToken`作为参数，再去请求后端`createOrder`接口：
+
+```java
+@RequestMapping(value = "/createorder",···)
+@ResponseBody
+public CommonReturnType createOrder(··· @RequestParam(name = "promoToken", required = false) String promoToken) throws BizException {
+    ···
+    //校验秒杀令牌是否正确
+    if (promoId != null) {
+        String inRedisPromoToken = (String) redisTemplate.opsForValue().
+                    get("promo_token_" + promoId + "_userid_" + userModel.getId() + "_itemid_" + itemId);
+    if (inRedisPromoToken == null) 
+        throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "令牌校验失败");
+    if (!StringUtils.equals(promoToken, inRedisPromoToken)) 
+        throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "令牌校验失败");
+}
+```
+
+这样就彻底完成了校验逻辑和下单逻辑的分离。现在的问题是，假设有1E个用户请求下单，那么就会生成1E的令牌，这是十分消耗性能的，所以接下来会引入**秒杀大闸进行限流**。
+
+## 限流—令牌大闸
+
+大闸的意思就是**令牌的数量是有限的**，当令牌用完时，就不再发放令牌了，那么下单将无法进行。之前我们通过`PromoService.publishPromo`将库存发布到了Redis上，现在我们将令牌总量也发布到Redis上，这里我们设定令牌总量是库存的5倍。
+
+```java
+public void publishPromo(Integer promoId) {
+    ···
+    //库存同步到Redis
+    redisTemplate.opsForValue().set("promo_item_stock_" + itemModel.getId(), itemModel.getStock());
+    //大闸限制数量设置到redis内
+    redisTemplate.opsForValue().set("promo_door_count_" + promoId, itemModel.getStock().intValue() * 5);
+}
+```
+
+接下来，在`PromoService.generateSecondKillToken`方法中，在生成令牌之前，首先将Redis里的令牌总量减1，然后再判断是否剩余，如果<0，直接返回null。
+
+```java
+//获取大闸数量
+long result = redisTemplate.opsForValue().
+                increment("promo_door_count_" + promoId, -1);
+if (result < 0) 
+    return null;
+//令牌生成       
+```
+
+这样，当令牌总量为0时，就不再发放令牌，也就无法下单了。
+
+### 令牌大闸限流缺点
+
+当商品种类少、库存少的时候，令牌大闸效果还不错。但是一旦参与活动的商品库存太大，比如10000个，那么一秒钟也有上十万的流量涌入，限制能力是很弱的。所以需要**队列泄洪**。
+
+## 限流—队列泄洪
+
+队列泄洪，就是让多余的请求**排队等待**。**排队**有时候比**多线程**并发效率更高，多线程毕竟有锁的竞争、上下文的切换，很消耗性能。而排队是无锁的，单线程的，某些情况下效率更高。
+
+比如Redis就是**单线程模型**，多个用户同时执行`set`操作，只能一一等待。
+
+比如MySQL的`insert`和`update`语句，会维护一个行锁。阿里SQL就不会，而是让多个SQL语句排队，然后依次执行。
+
+像支付宝就使用了队列泄洪，双11的时候，支付宝作为网络科技公司，可以承受很高的TPS，但是下游的各个银行，无法承受这么高的TPS。支付宝维护了一个“拥塞窗口”，慢慢地向下游银行发送流量，保护下游。
+
+那对于我们的项目，什么时候引入“队列泄洪”呢？在`OrderController`里面，之前拿到秒杀令牌后，就要开始执行下单的业务了。现在，我们把**下单业务**封装到一个**固定大小的线程池中**，一次**只处理固定大小的请求**。
+
+在`OrderController`里面引入`j.u.c.ExcutorService`，创建一个`init`方法，初始化线程池。
+
+```java
+@PostConstruct
+public void init() {
+    //20个线程的线程池
+    executorService = Executors.newFixedThreadPool(20);
+}
+```
+
+在拿到秒杀令牌后，使用线程池来处理下单请求。
+
+```java
+Future<Object> future = executorService.submit(new Callable<Object>() {
+    @Override
+    public Object call() throws Exception {
+        String stockLogId = itemService.initStockLog(itemId, amount);
+        if (!mqProducer.transactionAsyncReduceStock(userModel.getId(), itemId, promoId, amount, stockLogId)) {
+            throw new BizException(EmBizError.UNKNOWN_ERROR, "下单失败");
+        }
+        return null;
+    }
+});
+try {
+future.get();
+} catch (InterruptedException e) {
+    ···
+}
+```
+
+这样，就算瞬间涌入再多流量，得到处理的也就20个，其它全部等待。
+
+## 小结
+
+这一章我们
+
+1. 使用秒杀令牌，实现了校验业务和下单业务的分离。同时为秒杀大闸（令牌桶）做了铺垫。
+2. 使用秒杀大闸，实现了限流的第一步，限制了流量的总量。
+3. 使用队列泄洪，实现了限流的第二步，同一时间只有部分请求得到处理。
+
+## 接下来的优化方向
+
+接下来将会引入防刷限流技术，比如验证码技术等。
