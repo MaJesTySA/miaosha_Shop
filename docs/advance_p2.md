@@ -409,3 +409,156 @@ transactionMQProducer.setTransactionListener(new TransactionListener() {
 
 在匿名类`TransactionListener`里面，还需要覆写`checkLocalTransaction`方法，这个方法就是用来处理`UNKOWN`状态的。应该怎么处理？这就需要引入**库存流水**。
 
+# 库存流水
+
+数据库新建一张`stock_log`的表，用来记录库存流水，添加一个`ItemService.initStockLog`方法。
+
+```java
+public String initStockLog(Integer itemId, Integer amount) {
+    StockLogDO stockLogDO = new StockLogDO();
+    stockLogDO.setItemId(itemId);
+    stockLogDO.setAmount(amount);
+    stockLogDO.setStockLogId(UUID.randomUUID().toString().replace("-", ""));
+    //1表示初始状态，2表示下单扣减库存成功，3表示下单回滚
+    stockLogDO.setStatus(1);
+    stockLogDOMapper.insertSelective(stockLogDO);
+    return stockLogDO.getStockLogId();
+}
+```
+
+用户请求后端`OrderController.createOrder`接口，我们先初始化库存流水的状态，再调用事务型消息去下单。
+
+```java
+//OrderController
+//先检验用户登录信息
+String token = httpServletRequest.getParameterMap().get("token")[0];
+if (StringUtils.isEmpty(token)) {
+    throw new BizException(EmBizError.USER_NOT_LOGIN, "用户还未登录，不能下单");
+}
+UserModel userModel = (UserModel) redisTemplate.opsForValue().get(token);
+if (userModel == null) {
+    throw new BizException(EmBizError.USER_NOT_LOGIN, "登录过期，请重新登录");
+}
+
+//初始化库存流水
+String stockLogId = itemService.initStockLog(itemId, amount);
+
+//发送事务型消息，完成下单逻辑
+if (!mqProducer.transactionAsyncReduceStock(userModel.getId(), itemId, promoId, amount, stockLogId)) {
+    throw new BizException(EmBizError.UNKNOWN_ERROR, "下单失败");
+}
+```
+
+事务型消息会调用`OrderService.createOrder`方法，执行Redis扣减库存、订单入库、销量增加的操作，当这些操作都完成后，就说明下单完成了，**等着异步更新数据库了**。那么需要修改订单流水的状态。
+
+```java
+//OrderService.createOrder
+//订单入库
+orderDOMapper.insertSelective(orderDO);
+//增加销量
+itemService.increaseSales(itemId, amount);
+StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
+if (stockLogDO == null)
+    throw new BizException(EmBizError.UNKNOWN_ERROR);
+//设置库存流水状态为成功
+stockLogDO.setStatus(2);
+stockLogDOMapper.updateByPrimaryKeySelective(stockLogDO);
+```
+
+## 下单操作的处理
+
+异步更新数据库，需要事务型消息从`prepare`状态变成`commit`状态。假如此时`orderService.createOrder`**本身发生了异常**，那么就回滚事务型消息，并且返回`LocalTransactionState.ROLLBACK_MESSAGE`，这个下单操作就会被取消。
+
+如果**本身没有发生异常**，那么就返回`LocalTransactionState.COMMIT_MESSAGE`，此时事务型消息会从`prepare`状态变为`commit`状态，接着被消费端消费，异步扣减库存。
+
+```java
+//MqProducer.TransactionListener().executeLocalTransaction()
+try {
+    orderService.createOrder(userId, itemId, promoId, amount, stockLogId);
+} catch (BizException e) {
+    e.printStackTrace();
+    //如果发生异常，createOrder已经回滚，此时要回滚事务型消息。
+    //设置stockLog为回滚状态
+StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
+    stockLogDO.setStatus(3);
+    stockLogDOMapper.updateByPrimaryKeySelective(stockLogDO);
+    return LocalTransactionState.ROLLBACK_MESSAGE;
+}
+return LocalTransactionState.COMMIT_MESSAGE;
+```
+
+## UNKNOWN状态处理
+
+如上节结尾所述，如果在执行`createOrder`的时候，突然宕机了，此时事务型消息的状态是`UNKNOWN`，需要在`TransactionListener.checkLocalTransaction`方法中进行处理。
+
+```java
+public LocalTransactionState checkLocalTransaction(MessageExt message) {
+    //根据是否扣减库存成功，来判断要返回COMMIT，ROLLBACK还是UNKNOWN
+    String jsonString = new String(message.getBody());
+    Map<String, Object> map = JSON.parseObject(jsonString, Map.class);
+    String stockLogId = (String) map.get("stockLogId");
+    StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
+    if (stockLogDO == null)
+        return LocalTransactionState.UNKNOW;
+    //订单操作已经完成，等着异步扣减库存，那么就提交事务型消息
+    if (stockLogDO.getStatus() == 2) {
+        return LocalTransactionState.COMMIT_MESSAGE;
+    //订单操作还未完成，需要执行下单操作，那么就维持为prepare状态
+    } else if (stockLogDO.getStatus() == 1) {
+        return LocalTransactionState.UNKNOW;
+    }
+    //否则就回滚
+    return LocalTransactionState.ROLLBACK_MESSAGE;
+}
+```
+
+## 库存售罄处理
+
+现在是用户请求一次`OrderController.createOrder`就初始化一次流水，但是如果10000个用户抢10个商品，就会初始化10000次库存流水，这显然是不行的。
+
+解决的方法是在`ItemService.decreaseStock`中，如果库存没有了，就打上“**售罄标志**”。
+
+```java
+public boolean decreaseStock(Integer itemId, Integer amount) {
+    long affectedRow = redisTemplate.opsForValue().
+                increment("promo_item_stock_" + itemId, amount.intValue() * -1);
+    if (affectedRow > 0) {
+        return true;
+    } else if (affectedRow == 0) {
+        //打上售罄标识
+        redisTemplate.opsForValue().set("promo_item_stock_invalid_" + itemId, "true");
+        return true;
+    } else {
+        increaseStock(itemId, amount);
+        return false;
+    }
+}
+```
+
+在`OrderController.createOrder`初始化流水之前，先判断一下是否售罄，售罄了就直接抛出异常。
+
+```java
+//是否售罄
+if (redisTemplate.hasKey("promo_item_stock_invalid_"+itemId))
+    throw new BizException(EmBizError.STOCK_NOT_ENOUGH);
+String stockLogId = itemService.initStockLog(itemId, amount);
+```
+
+## 小结
+
+这一节通过引入库存流水，来记录库存的状态，以便在**事务型消息处于不同状态时进行处理**。
+
+事务型消息提交后，会在`broker`里面处于`prepare`状态，也即是`UNKNOWN`状态，等待被消费端消费，或者是回滚。`prepare`状态下，会执行`OrderService.createOrder`方法。
+
+此时有两种情况：
+
+1. `createOrder`执行完**没有宕机**，要么**执行成功**，要么**抛出异常**。**执行成功**，那么就说明下单成功了，订单入库了，Redis里的库存扣了，销量增加了，**等待着异步扣减库存**，所以将事务型消息的状态，从`UNKNOWN`变为`COMMIT`，这样消费端就会消费这条消息，异步扣减库存。抛出异常，那么订单入库、Redis库存、销量增加，就会被数据库回滚，此时去异步扣减的消息，就应该“丢弃”，所以发回`ROLLBACK`，进行回滚。
+2. `createOrder`执行完**宕机**了，那么这条消息会是`UNKNOWN`状态，这个时候就需要在`checkLocalTransaction`进行处理。如果`createOrder`执行完毕，此时`stockLog.status==2`，就说明下单成功，需要去异步扣减库存，所以返回`COMMIT`。如果`status==1`，说明下单还未完成，还需要继续执行下单操作，所以返回`UNKNOWN`。如果`status==3`，说明下单失败，需要回滚，不需要异步扣减库存，所以返回`ROLLBACK`。
+
+### 可以改进的地方
+
+目前只是扣减库存异步化，实际上销量逻辑和交易逻辑都可以异步化，这里就不赘述了。
+
+## 接下来的优化方向
+
+接下来会引入流量削峰技术，防止下单接口被黄牛狂刷。
