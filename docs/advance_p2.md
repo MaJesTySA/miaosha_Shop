@@ -1,4 +1,60 @@
-[【性能优化，打造亿级秒杀系统笔记】上](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance.md)
+[【性能优化，打造亿级秒杀系统笔记】上](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p1.md)
+
+------
+
+- [交易优化之缓存库存](#交易优化之缓存库存)
+  - [交易接口瓶颈](#交易接口瓶颈)
+  - [交易验证优化](#交易验证优化)
+    - [用户校验缓存优化](#用户校验缓存优化)
+    - [活动校验缓存优化](#活动校验缓存优化)
+    - [缓存优化后的效果](#缓存优化后的效果)
+  - [库存扣减优化](#库存扣减优化)
+    - [索引优化](#索引优化)
+    - [库存扣减缓存优化](#库存扣减缓存优化)
+      - [RocketMQ](#rocketmq)
+      - [同步数据库库存到缓存](#同步数据库库存到缓存)
+      - [同步缓存库存到数据库（异步扣减库存）](#同步缓存库存到数据库（异步扣减库存）)
+      - [异步扣减库存存在的问题](#异步扣减库存存在的问题)
+  - [小结](#小结)
+  - [接下来的优化方向](#接下来的优化方向)
+- [交易优化之事务型消息](#交易优化之事务型消息)
+  - [异步消息发送时机问题](#异步消息发送时机问题)
+    - [解决方法](#解决方法)
+  - [事务提交问题](#事务提交问题)
+    - [解决方法](#解决方法-1)
+  - [事务型消息](#事务型消息)
+    - [更新下单流程](#更新下单流程)
+  - [小结](#小结-1)
+  - [接下来的优化方向](#接下来的优化方向-1)
+- [库存流水](#库存流水)
+  - [下单操作的处理](#下单操作的处理)
+  - [UNKNOWN状态处理](#unknown状态处理)
+  - [库存售罄处理](#库存售罄处理)
+  - [小结](#小结-2)
+    - [可以改进的地方](#可以改进的地方)
+  - [接下来的优化方向](#接下来的优化方向-2)
+- [流量削峰](#流量削峰)
+  - [业务解耦—秒杀令牌](#业务解耦秒杀令牌)
+  - [限流—令牌大闸](#限流令牌大闸)
+    - [令牌大闸限流缺点](#令牌大闸限流缺点)
+  - [限流—队列泄洪](#限流队列泄洪)
+  - [小结](#小结-3)
+  - [接下来的优化方向](#接下来的优化方向-3)
+- [防刷限流](#防刷限流)
+  - [验证码技术](#验证码技术)
+  - [限流方案—限并发](#限流方案限并发)
+  - [限流方案—令牌桶/漏桶](#限流方案令牌桶漏桶)
+    - [令牌桶](#令牌桶)
+    - [漏桶](#漏桶)
+    - [区别](#区别)
+  - [限流力度](#限流力度)
+  - [限流范围](#限流范围)
+  - [RateLimiter限流实现](#ratelimiter限流实现)
+  - [防刷技术](#防刷技术)
+    - [传统防刷技术](#传统防刷技术)
+    - [黄牛为什么难防](#黄牛为什么难防)
+    - [防黄牛方案](#防黄牛方案)
+  - [小结](#小结-4)
 
 # 交易优化之缓存库存
 
@@ -77,7 +133,7 @@ public ItemModel getItemByIdInCache(Integer id) {
 
 RocketMQ是阿里巴巴在RabbitMQ基础上改进的一个消息中间件，具体的就不赘述了。
 
-只是要特别说明一下，默认的RocketMQ**配置很坑**（`Xms4g Xmx4g Xmn2g`），会导致Jav**a内存不足**的问题。需要修改`mqnamesrv.xml`，将`NewSize`、`MaxNewSize`、`PermSize`、`MaxPermSize`设置为自己服务器可承受值。
+只是要特别说明一下，默认的RocketMQ**配置很坑**（`Xms4g Xmx4g Xmn2g`），会导致Java**内存不足**的问题。需要修改`mqnamesrv.xml`，将`NewSize`、`MaxNewSize`、`PermSize`、`MaxPermSize`设置为自己服务器可承受值。
 
 此外，`mqnamesrv`甚至不能用`localhost`启动，必须是本机公网IP，否则报`RemotingTooMuchRequestException`。
 
@@ -89,7 +145,7 @@ RocketMQ是阿里巴巴在RabbitMQ基础上改进的一个消息中间件，具�
 public void publishPromo(Integer promoId) {
     //通过活动id获取活动
     PromoDO promoDO=promoDOMapper.selectByPrimaryKey(promoId);
-    if(promoDO.getItemId()==null||promoDO.getItemId().intValue()==0)
+    if(promoDO.getItemId()==null || promoDO.getItemId().intValue()==0)
         return;
     ItemModel itemModel=itemService.getItemById(promoDO.getItemId());
     //库存同步到Redis
@@ -334,7 +390,7 @@ TransactionSynchronizationManager.registerSynchronization(new TransactionSynchro
 
 处于`prepared`状态的消息，会执行`TransactionListener`的`executeLocalTransaction`方法，根据执行结果，**改变事务型消息的状态**，**让消费端消费或是不消费**。
 
-在`mq.MyProducer`类里面新注入一个`TransactionMQProducer`类，与`DefaultMQProducer`类似，也需要设置服务器地址、命名空间等。
+在`mq.MqProducer`类里面新注入一个`TransactionMQProducer`类，与`DefaultMQProducer`类似，也需要设置服务器地址、命名空间等。
 
 新建一个`transactionAsyncReduceStock`的方法，该方法使用**事务型消息**进行异步扣减库存。
 
@@ -405,9 +461,9 @@ transactionMQProducer.setTransactionListener(new TransactionListener() {
 
 ## 接下来的优化方向
 
-不要以为这样就万事大吉了，上述流程还有一个漏洞，就是当执行`orderService.createOrder`后，突然**又宕机了**，根本没有返回，这个时候事务型消息就会进入`UNKOWN`状态，我们需要处理这个状态。
+不要以为这样就万事大吉了，上述流程还有一个漏洞，就是当执行`orderService.createOrder`后，突然**又宕机了**，根本没有返回，这个时候事务型消息就会进入`UNKNOWN`状态，我们需要处理这个状态。
 
-在匿名类`TransactionListener`里面，还需要覆写`checkLocalTransaction`方法，这个方法就是用来处理`UNKOWN`状态的。应该怎么处理？这就需要引入**库存流水**。
+在匿名类`TransactionListener`里面，还需要覆写`checkLocalTransaction`方法，这个方法就是用来处理`UNKNOWN`状态的。应该怎么处理？这就需要引入**库存流水**。
 
 # 库存流水
 
@@ -561,7 +617,7 @@ String stockLogId = itemService.initStockLog(itemId, amount);
 
 ## 接下来的优化方向
 
-接下来会引入流量削峰技术。
+目前下单接口会被脚本不停地刷，影响正常用户的体验。此外，验证逻辑和下单逻辑强关联，耦合度比较高。最后，验证逻辑也比较复杂。接下来会引入流量削峰技术。
 
 # 流量削峰
 
@@ -620,6 +676,7 @@ if (promoToken == null)
     throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "生成令牌失败");
 return CommonReturnType.create(promoToken);
 }
+
 ```
 
 前端在点击“**下单**”后，首先会请求`generateToken`接口，返回秒杀令牌。然后将秒杀令牌`promoToken`作为参数，再去请求后端`createOrder`接口：
@@ -638,6 +695,7 @@ public CommonReturnType createOrder(··· @RequestParam(name = "promoToken", re
     if (!StringUtils.equals(promoToken, inRedisPromoToken)) 
         throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "令牌校验失败");
 }
+
 ```
 
 这样就彻底完成了校验逻辑和下单逻辑的分离。现在的问题是，假设有1E个用户请求下单，那么就会生成1E的令牌，这是十分消耗性能的，所以接下来会引入**秒杀大闸进行限流**。
@@ -654,6 +712,7 @@ public void publishPromo(Integer promoId) {
     //大闸限制数量设置到redis内
     redisTemplate.opsForValue().set("promo_door_count_" + promoId, itemModel.getStock().intValue() * 5);
 }
+
 ```
 
 接下来，在`PromoService.generateSecondKillToken`方法中，在生成令牌之前，首先将Redis里的令牌总量减1，然后再判断是否剩余，如果<0，直接返回null。
@@ -665,6 +724,7 @@ long result = redisTemplate.opsForValue().
 if (result < 0) 
     return null;
 //令牌生成       
+
 ```
 
 这样，当令牌总量为0时，就不再发放令牌，也就无法下单了。
@@ -693,6 +753,7 @@ public void init() {
     //20个线程的线程池
     executorService = Executors.newFixedThreadPool(20);
 }
+
 ```
 
 在拿到秒杀令牌后，使用线程池来处理下单请求。
@@ -713,6 +774,7 @@ future.get();
 } catch (InterruptedException e) {
     ···
 }
+
 ```
 
 这样，就算瞬间涌入再多流量，得到处理的也就20个，其它全部等待。
@@ -721,10 +783,137 @@ future.get();
 
 这一章我们
 
-1. 使用秒杀令牌，实现了校验业务和下单业务的分离。同时为秒杀大闸（令牌桶）做了铺垫。
+1. 使用秒杀令牌，实现了校验业务和下单业务的分离。同时为秒杀大闸做了铺垫。
 2. 使用秒杀大闸，实现了限流的第一步，限制了流量的总量。
 3. 使用队列泄洪，实现了限流的第二步，同一时间只有部分请求得到处理。
 
 ## 接下来的优化方向
 
 接下来将会引入防刷限流技术，比如验证码技术等。
+
+# 防刷限流
+
+## 验证码技术
+
+之前的流程是，用户点击下单后，会直接拿到令牌然后执行下单流程。现在，用户点击下单后，前端会弹出一个“验证码”，用户输入之后，才能请求下单接口。
+
+`OrderController`新开一个`generateVerifyCode`接口。
+
+```java
+@RequestMapping(value = "/generateverifycode",···)
+@ResponseBody
+public void generateVerifyCode(HttpServletResponse response) throws BizException, IOException {
+    ···验证
+    //验证用户信息
+    Map<String, Object> map = CodeUtil.generateCodeAndPic();
+    //生成的验证码存到Redis里，并设置过期时间
+    redisTemplate.opsForValue().set("verify_code_" + userModel.getId(), map.get("code"));
+    redisTemplate.expire("verify_code_" + userModel.getId(), 10, TimeUnit.MINUTES);
+    //生成的图片，响应到前端页面
+    ImageIO.write((RenderedImage) map.get("codePic"), "jpeg", response.getOutputStream());
+}
+
+```
+
+之前获取秒杀令牌的`generateToken`接口，需要添加验证码校验逻辑。
+
+```java
+public CommonReturnType generateToken(··· @RequestParam(name = "verifyCode") String verifyCode) throws BizException {
+    //验证用户登录信息
+    ···
+    //验证验证码的有效性
+    String redisVerifyCode = (String) redisTemplate.opsForValue().get("verify_code_" + userModel.getId());
+    if (StringUtils.isEmpty(redisVerifyCode))
+        throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "请求非法");
+    if (!redisVerifyCode.equalsIgnoreCase(verifyCode))
+        throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "请求非法");
+    //获取秒杀访问令牌
+    ···
+}
+
+```
+
+这样，就实现了在下单之前，添加一个验证码，限制部分流量的功能。
+
+## 限流方案—限并发
+
+限制并发量意思就是同一时间**只有一定数量的线程去处理请求**，实现也比较简单，维护一个**全局计数器**，当请求进入接口时，计数器-1，并且判断计数器是否>0，大于0则处理请求，小于0则拒绝等待。
+
+但是一般衡量并发性，是用TPS或者QPS，而该方案由于限制了线程数，自然不能用TPS或者QPS衡量。
+
+## 限流方案—令牌桶/漏桶
+
+### 令牌桶
+
+客户端请求接口，必须先从令牌桶中获取令牌，令牌是由一个“定时器”定期填充的。在一个时间内，令牌的数量是有限的。令牌桶的大小为100，那么TPS就为100。
+
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/tokenBucket.png)
+
+### 漏桶
+
+客户端请求接口，会向漏桶里面“加水”。漏桶每秒漏出一定数量的“水”，也就是处理请求。只有当漏洞不满时，才能请求。
+
+![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/leekBucket.png)
+
+### 区别
+
+漏桶无法应对**突发流量**，比如突然来10个请求，只能处理一个。但是令牌桶，可以一次性处理10个。所以，令牌桶用得比较多。
+
+## 限流力度
+
+分为**接口维**度和**总维度**，很好理解。接口维度就是限制某个接口的流量，而总维度是限制所有接口的流量。
+
+## 限流范围
+
+分为**集群限流**和**单机限流**，集群限流顾名思义就是限制整个集群的流量，需要用Redis或者其它中间件技术来做统一计数器，往往会产生性能瓶颈。单机限流在负载均衡的前提下效果更好。
+
+## RateLimiter限流实现
+
+`google.guava.RateLimiter`就是令牌桶算法的一个实现类，`OrderController`引入这个类，在`init`方法里面，初始令牌数量为200。
+
+```java
+@PostConstruct
+    public void init() {
+    //20个线程的线程池
+    executorService = Executors.newFixedThreadPool(20);
+    //200个令牌，即200TPS
+    orderCreateRateLimiter = RateLimiter.create(200);
+}
+
+```
+
+请求`createOrder`接口之前，会调用`RateLimiter.tryAcquire`方法，看当前令牌是否足够，不够直接抛出异常。
+
+```java
+if (!orderCreateRateLimiter.tryAcquire())
+     throw new BizException(EmBizError.RATELIMIT);
+
+```
+
+## 防刷技术
+
+排队、限流、令牌只能控制总流量，无法控制黄牛流量。
+
+### 传统防刷技术
+
+1. 限制一个会话（Session、Token）一定时间内请求接口的次数。多会话接入绕开无效，比如黄牛可以开启多个会话。
+2. 限制一个IP一定时间内请求接口的次数。容易误伤，某个局域网的正常用户共享一个IP进行访问。而且IP可以被伪造。
+
+### 黄牛为什么难防
+
+1. 模拟硬件设备，比如手机。一个看似正常的用户，可能是用模拟器模拟出来的。
+2. 设备牧场，一屋子手机刷接口。
+3. 人工作弊，这个最难防，请真人刷接口。
+
+### 防黄牛方案
+
+1. **设备指纹方式**：采集终端设备各项数据，启动应用时生成一个唯一设备指纹。根据对应设备的指纹参数，估计是可疑设备的概率。
+2. **凭证系统**：根据设备指纹下发凭证，在关键业务链路上带上凭证并由凭证服务器验证。凭证服务器根据设备指纹参数和风控系统判定凭证的可疑程度。若凭证分数低于设定值，则开启验证。
+
+## 小结
+
+这一节我们
+
+1. 通过引入验证码技术，在发送秒杀令牌之前，再做一层限流。
+2. 介绍了三种限流的方案，使用`RateLimiter`实现了令牌桶限流。
+3. 介绍了常见的防刷技术以及它们的缺点。介绍了黄牛为什么难防，应该怎样防。
