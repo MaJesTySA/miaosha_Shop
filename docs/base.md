@@ -34,8 +34,6 @@
     * [活动商品下单业务](#活动商品下单业务)
 * [改进](#改进)
 
-------
-
 # 效果展示
 
 ## 注册
@@ -633,5 +631,7 @@ orderModel.setPromoId(promoId);
 - 下单操作多、缓慢
 - 浪涌流量如何解决
 
-项目进阶请看[【秒杀项目进阶 上】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p1.md)。
+------
+
+[【进阶项目笔记 上】](https://github.com/MaJesTySA/miaosha_Shop/blob/master/docs/advance_p1.md)，包含**云端部署**、**jmeter性能压测**、**Tomcat优化**、**分布式扩展**、**缓存优化**等。
 
