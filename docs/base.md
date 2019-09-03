@@ -38,7 +38,7 @@
 
 ## 注册
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register.png" style="width:300px;height:auto" align="center"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register.png" style="width:300px;height:auto" align="middle"/>
 
 <img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register1.png" style="width:300px;height:auto"/>
 
