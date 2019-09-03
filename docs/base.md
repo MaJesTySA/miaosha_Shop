@@ -221,8 +221,6 @@ public class BizException extends Exception implements CommonError{
 throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR);
 ```
 
-------
-
 ## 异常拦截器处理自定义异常
 
 虽然上面抛出了自定义的`BizException`异常，但是SpringBoot还是和之前一样，返回500页面。这是由于，`BizException`被抛给了Tomcat，而Tomcat不知道如何处理`BizException`。所以，需要一个**拦截器**，拦截抛出的`BizException`。
@@ -260,8 +258,6 @@ public Object handlerException(HttpServletRequest request, Exception ex){
 后端的Controller类需要添加`@CrossOrigin(allowCredentials = "true",allowedHeaders = "*")`注解。Controller的每一个API的`@RequestMapping`注解，也要添上`consumes = {"application/x-www-form-urlencoded"}`字段。
 
 这样就解决了Ajax跨域问题。
-
-------
 
 ## 优化校验规则
 
@@ -314,7 +310,7 @@ public class ValidationResult {
 
 ### 创建校验器/使用校验
 
-定义了校验规则和校验结果，那如何使用校验呢？新建一个`validator.ValidatorImpl`类，实现`InitializingBean`接口，为了能在这个Bean初始化的时候，初始化其中的`avax.validation.Validator`对象`validator`。
+定义了校验规则和校验结果，那如何使用校验呢？新建一个`validator.ValidatorImpl`类，实现`InitializingBean`接口，为了能在这个Bean初始化的时候，初始化其中的`javax.validation.Validator`对象`validator`。
 
 自定义一个校验方法`validate`，这个方法实际上就是调用`validator`对象的`validate(Object obj)`方法。该方法会根据校验规则，返回一个`Set`，如果传入的`Object`出现校验错误，就会把错误加入到`Set`中。
 
@@ -323,7 +319,7 @@ public class ValidationResult {
 ```java
 @Component
 public class ValidatorImpl implements InitializingBean {
-	//javax.validation.Validator校验器
+    //javax.validation.Validator校验器
     private Validator validator;
 	
     //在Bean初始化时，初始化validator对象。
@@ -334,10 +330,10 @@ public class ValidatorImpl implements InitializingBean {
 
     //校验的方法
     public ValidationResult validate(Object bean) {
-		//校验的结果
+        //校验的结果
         final ValidationResult result = new ValidationResult();
-	    //javax.validation.Validator对象的validate(Object obj)方法
-		Set<ConstraintViolation<Object>> constraintViolationSet = validator.validate(bean);
+        //javax.validation.Validator对象的validate(Object obj)方法
+        Set<ConstraintViolation<Object>> constraintViolationSet = validator.validate(bean);
 
         if (constraintViolationSet.size() > 0) {
             result.setHasErrors(true);
@@ -361,13 +357,11 @@ public void register(UserModel userModel) throws BizException {
     }
     //校验器校验
     ValidationResult result=validator.validate(userModel);
-   	//根据ValidationResult的isHasErrors完成校验。
+    //根据ValidationResult的isHasErrors完成校验。
     if(result.isHasErrors()){
         throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR,result.getErrMsg());
 }
 ```
-
-------
 
 ## 用户业务
 
