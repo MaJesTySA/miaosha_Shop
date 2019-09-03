@@ -38,23 +38,23 @@
 
 ## 注册
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register.png" style="width:300px;height:auto"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register.png" style="width:300px;height:auto" align="center"/>
 
 <img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/register1.png" style="width:300px;height:auto"/>
 
 ## 商品列表
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/list.png" style="width:600px;height:auto"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/list.png" style="width:600px;height:auto" align="center"/>
 
 ## 商品详情
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/SecKill_Bases/master/imgs/item.png" style="width:300px;height:auto"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/item.png" style="width:300px;height:auto" align="center"/>
 
 ------
 
 # 项目架构
 
-<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/structure.png" style="width:auto;height:auto"/>
+<img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/structure.png" style="width:auto;height:auto" align="center"/>
 
 # 要点和细节
 
