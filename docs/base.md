@@ -34,6 +34,8 @@
     * [活动商品下单业务](#活动商品下单业务)
 * [改进](#改进)
 
+------
+
 # 效果展示
 
 ## 注册
@@ -55,6 +57,8 @@
 # 项目架构
 
 <img src="https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/structure.png" style="width:auto;height:auto" align="center"/>
+
+------
 
 # 要点和细节
 
@@ -123,7 +127,7 @@ public class CommonReturnType {
     //若status=success，data返回前端需要的JSON数据
     //若fail，则data内使用通用的错误码格式
     private Object data;
-	public static CommonReturnType create(Object result){
+    public static CommonReturnType create(Object result){
         return CommonReturnType.create(result,"success");
     }
     public static CommonReturnType create(Object result,String status){
@@ -134,8 +138,6 @@ public class CommonReturnType {
     }
 }
 ```
-
-------
 
 ## 处理错误信息
 
@@ -197,7 +199,7 @@ public enum EmBizError implements CommonError {
 
 ```java
 public class BizException extends Exception implements CommonError{
-	private CommonError commonError;
+    private CommonError commonError;
     //直接接受EmBizError的传参，用于构造业务异常，多态
     public BizException(CommonError commonError){
         super();
