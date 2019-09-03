@@ -53,7 +53,7 @@
     * [Nginx Proxy Cache缓存效果](#nginx-proxy-cache缓存效果)
   * [Nginx lua脚本](#nginx-lua脚本)
     * [lua脚本实战](#lua脚本实战)
-  * [OpenResty—Shared dic](#openrestyshared-dic)
+  * [OpenResty—Shared dict](#openrestyshared-dict)
     * [Shared dict缓存效果](#shared-dict缓存效果)
   * [小结](#小结-3)
   * [接下来的优化方向](#接下来的优化方向-3)
@@ -289,6 +289,8 @@ public class WebServerConfiguration implements WebServerFactoryCustomizer<Config
 ## 接下来的优化方向
 
 一是对服务器进行**分布式扩展**，二是**优化SQL查询**，比如添加索引。
+
+------
 
 # 分布式扩展优化
 
@@ -785,9 +787,9 @@ location /staticitem/get{
 
 新建一个`helloworld.lua`，使用`ngx.exec("/item/get?id=1")`访问某个URL。同样在`nginx.conf`里面添加一个`helloworld`location。这样，当访问`/helloworld`的时候就会跳转到`item/get?id=1`这个URL上。
 
-## OpenResty—Shared dic
+## OpenResty—Shared dict
 
-OpenResty对Nginx进行了扩展，添加了很多功能，比如继承了lua开发环境、提供了对MySQL、Redis、Memcached的支持等。比原版Nginx使用起来更加方便。
+OpenResty对Nginx进行了扩展，添加了很多功能，比如集成了lua开发环境、提供了对MySQL、Redis、Memcached的支持等。比原版Nginx使用起来更加方便。
 
 OpenResty的Shared dic是一种类似于`HashMap`的Key-Value**内存**结构，对所有`worker`进程可见，并且可以指定LRU淘汰规则。
 
