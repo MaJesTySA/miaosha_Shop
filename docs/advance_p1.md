@@ -20,6 +20,7 @@
   * [Spring Boot内嵌Tomcat线程优化](#spring-boot内嵌tomcat线程优化)
   * [Spring Boot内嵌Tomcat网络连接优化](#spring-boot内嵌tomcat网络连接优化)
   * [小结](#小结)
+  * [优化后的效果](#优化后的效果)
   * [接下来的优化方向](#接下来的优化方向)
 * [分布式扩展优化](#分布式扩展优化)
   * [项目架构](#项目架构-1)
@@ -78,6 +79,8 @@
   * [小结](#小结-4)
   * [接下来的优化方向](#接下来的优化方向-4)
 
+------
+
 # 进阶项目核心知识点
 
 ![](https://raw.githubusercontent.com/MaJesTySA/miaosha_Shop/master/imgs/points.png)
@@ -102,7 +105,7 @@
 
 在之前的基础项目中，抛出的`BizException`会被`BaseController`拦截到，并进行相应处理。但是如果前端发送到后端的URL找不到，即**404/405错误**，此时根本进入不了后端的`Controller`，需要处理。
 
-新建一个`controller.GlobalExceptionHandler`的类，整个类加上`@ControllerAdvice`接口，表示这是一个**`AOP增强类`**，在什么时候增强呢？就需要我们编写。
+新建一个`controller.GlobalExceptionHandler`的类，整个类加上`@ControllerAdvice`接口，表示这是一个**AOP增强类**，在什么时候增强呢？就需要我们编写。
 
 ```java
 @ControllerAdvice
@@ -141,6 +144,8 @@ spring.resources.add-mappings=false
 ```
 
 这样，404/405错误会触发`NoHandlerFoundException`，然后被`GlobalExceptionHandler`捕获到。
+
+------
 
 # 项目云端部署
 
@@ -198,9 +203,13 @@ nohup java -Xms400m -Xmx400m -XX:NewSize=200m -XX:MaxNewSize=200m -jar miaosha.j
 
 使用`./deploy.sh &`即可在后台启动，使用`tail -f nohup.out`即可查看项目启动、运行的信息。
 
+------
+
 # jmeter性能压测
 
 本项目使用`jmeter`来进行并发压测。使用方法简单来说就是新建一个线程组，添加需要压测的接口地址，查看结果树和聚合报告。
+
+------
 
 # 单机服务器并发容量问题和优化
 
@@ -272,6 +281,10 @@ public class WebServerConfiguration implements WebServerFactoryCustomizer<Config
 
 1. 发现了Spring Boot内嵌Tomcat的**线程容量问题**。通过在Spring Boot配置文件中添加配置项，提高了Tomcat的等待队列长度、最大工作线程、最小工作线程，榨干服务器性能。
 2. Spring Boot内嵌Tomcat默认使用`HTTP 1.0`的**短连接**，由于Spring Boot并没有把所有Tomcat配置都暴露出来，所以需要编写一个配置类使用`HTTP 1.1`的**长连接**。
+
+## 优化后的效果
+
+未调整线程数之前（2核CPU），200*50个请求，TPS在**150**左右，平均响应**1000毫秒**。调整之后，TPS在**250**左右，平均响应**400**毫秒。
 
 ## 接下来的优化方向
 
