@@ -430,8 +430,6 @@ public CommonReturnType login(@RequestParam(name = "telphone")String telphone,
 
 请求后端`ItemController.list`接口，跟上面类似，查询所有商品。
 
-------
-
 ## 交易业务
 
 ### 下单业务
@@ -485,11 +483,9 @@ if(!result)
 
 有以下几个细节需要注意，在`OrderServiceImpl.generatorOrderNo`方法中可以查看实现细节。
 
-1. 前8位比较好实现，使用`LcaoDataTime`，处理一下格式即可。
+1. 前8位比较好实现，使用`LocalDateTime`，处理一下格式即可。
 2. 中间6位自增序列，需要新建一个`sequence_info`表，里面包含`name`、`current_value`、`step`三个字段。这个表及其对应的DO专门用来产生**自增序列**。
 3. `generatorOrderNo`方法需要将序列的更新信息写入到`sequence_info`表，而且该方法封装在`OrderServiceImpl.createOrder`方法中。如果`createOrder`执行失败，会进行回滚，默认情况下，`generatorOrderNo`也会回滚。而我们希望**生成ID的事务不受影响**，就算订单创建失败，ID还是继续生成，所以`generatorOrderNo`方法使用了`REQUIRES_NEW`事务传播方式。
-
-------
 
 ## 秒杀业务
 
