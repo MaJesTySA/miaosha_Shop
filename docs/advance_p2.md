@@ -458,7 +458,7 @@ transactionMQProducer.setTransactionListener(new TransactionListener() {
 这一章我们
 
 1. 首先解决了**发送异步消息时机**的问题，之前是在`ItemService.decreaseStock`，当在Redis里面扣减成功后，发送异步消息。这样会导致数据库回滚，但Redis无法回滚的问题。所以我们把发送异步消息提到所有下单操作完成之后。
-2. 其次，由于Spring的`@Transactional`标签是在方法返回后，才提交事务，如果返回阶段出了问题，那么数据库回滚了，但是缓存的库存却扣了。所以，我们使用了**`afterCommit`**方法。
+2. 其次，由于Spring的`@Transactional`标签是在方法返回后，才提交事务，如果返回阶段出了问题，那么数据库回滚了，但是缓存的库存却扣了。所以，我们使用了`afterCommit`方法。
 3. 最后，如果在执行`afterCommit`的时候，发生了异常，那么消息就发不出去，又会导致数据一致性问题。所以我们通过使用**事务型消息**，把**下单操作包装在异步扣减消息里面**，让下单操作跟扣减消息**同生共死**。
 
 ## 接下来的优化方向
@@ -658,7 +658,7 @@ public String generateSecondKillToken(Integer promoId,Integer itemId,Integer use
     String token= UUID.randomUUID().toString().replace("-","");
     redisTemplate.opsForValue().set("promo_token_"+promoId+"_userid_"+userId+"_itemid_"+itemId,token);
     redisTemplate.expire("promo_token_"+promoId+"_userid_"+userId+"_itemid_"+itemId, 5,TimeUnit.MINUTES);
-        return token;
+    return token;
 }
 ```
 
@@ -674,9 +674,9 @@ public CommonReturnType generateToken(···) throws BizException {
     ···
     //获取秒杀访问令牌
     String promoToken = promoService.generateSecondKillToken(promoId, itemId, userModel.getId());
-if (promoToken == null)
-    throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "生成令牌失败");
-return CommonReturnType.create(promoToken);
+    if (promoToken == null)
+        throw new BizException(EmBizError.PARAMETER_VALIDATION_ERROR, "生成令牌失败");
+    return CommonReturnType.create(promoToken);
 }
 
 ```
@@ -926,8 +926,9 @@ if (!orderCreateRateLimiter.tryAcquire())
 
 ## 交易验证优化
 
-| 交易验证优化（1000*20） | TPS  | 平均响应时间/ms | us   | load average |
-| ----------------------- | ---- | --------------- | ---- | ------------ |
-| 优化前                  | 450  | 1500            | 7.5  | 1分钟2.21    |
-| 优化后                  | 1200 | 600             | -    | -            |
+| 交易验证优化（1000*20） | TPS      | 平均响应时间/ms | us   | load average |
+| ----------------------- | -------- | --------------- | ---- | ------------ |
+| 优化前                  | 450      | 1500            | 7.5  | 1分钟2.21    |
+| 优化后                  | **1200** | **600**         | -    | -            |
 
+ 
