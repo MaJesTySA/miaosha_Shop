@@ -537,7 +537,7 @@ try {
     e.printStackTrace();
     //如果发生异常，createOrder已经回滚，此时要回滚事务型消息。
     //设置stockLog为回滚状态
-StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
+    StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
     stockLogDO.setStatus(3);
     stockLogDOMapper.updateByPrimaryKeySelective(stockLogDO);
     return LocalTransactionState.ROLLBACK_MESSAGE;
